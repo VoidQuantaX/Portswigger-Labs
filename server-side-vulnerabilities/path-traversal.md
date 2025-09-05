@@ -18,7 +18,7 @@ Path Traversal (Directory Traversal) lets attackers read files outside the web r
 3. Retrieved the /etc/passwd file successfully.  
 
 ### 📸 Screenshots
-![Path Traversal Screenshot](./images/path-traversal-1.png)
+![Path Traversal Screenshot](../images/path-traversal-step1.png)
 
 ### ✅ Mitigation
 - Validate and sanitize file path inputs.  
