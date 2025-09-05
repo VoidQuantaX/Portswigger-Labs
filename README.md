@@ -10,14 +10,14 @@ Each write-up includes *screenshots, methodology, exploitation steps, and remedi
 
 Write-ups are organized by vulnerability categories:
 
-- *Server-Side Vulnerabilities*
-  - Path Traversal
-  - Access Control
-  - Authentication
-  - SSRF
-  - File Upload
-  - OS Command Injection
-  - SQL Injection  
+### 🔹 Server-Side Vulnerabilities
+- [Path Traversal](server-side-vulnerabilities/Path-Traversal.md)
+- [Access Control](server-side-vulnerabilities/Access-Control.md)
+- [Authentication](server-side-vulnerabilities/Authentication.md)
+- [Server-Side Request Forgery (SSRF)](server-side-vulnerabilities/SSRF.md)
+- [File Upload Vulnerabilities](server-side-vulnerabilities/File-Upload.md)
+- [OS Command Injection](server-side-vulnerabilities/OS-Command-Injection.md)
+- [SQL Injection](server-side-vulnerabilities/SQL-Injection.md) 
 
 - *Client-Side Vulnerabilities*
   - Cross-Site Scripting (XSS)
