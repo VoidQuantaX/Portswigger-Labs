@@ -97,3 +97,52 @@ This lab demonstrates a *broken access control* vulnerability where an administr
 - Regularly review source code and remove hardcoded sensitive URLs.  
 
 ---
+
+# Access Control – Lab 3: Parameter-Based Access Control
+
+---
+
+## 🔹 Overview
+This lab demonstrates an insecure access control mechanism where user roles are determined by *parameters* (such as query strings, cookies, or hidden fields) that are directly modifiable by the client.  
+By tampering with these parameters, an attacker can escalate privileges and gain administrative access.
+
+---
+
+## 🔹 Methodology
+
+1. *Normal Login*
+   - Logged in as a regular user.  
+   - Observed a parameter in the request: admin=false.
+
+2. *Tampering the Parameter*
+   - Captured the request in Burp Suite Proxy while accessing the *Admin Panel*.  
+   - Modified the parameter from admin=false → admin=true.  
+   - Successfully accessed the *admin interface*.
+
+3. *Exploitation*
+   - Performed an administrative action: deleted the user carlos.  
+   - Lab solved ✅
+
+---
+
+## 🔹 Proof of Exploit
+![Parameter tampering to access admin panel](../images/access-control-lab3-solved.png)
+
+---
+
+## 🔹 Security Impact
+- Any user can escalate privileges by altering request parameters.  
+- Potential consequences:
+  - Full admin account takeover.  
+  - Ability to delete or modify user data.  
+  - Compromise of the entire application.
+
+---
+
+## 🔹 Remediation
+- Never store authorization or role information in user-controllable parameters.  
+- Implement *server-side role-based access control (RBAC)*.  
+- Validate user roles on every sensitive action.  
+- Use secure session handling instead of hidden fields or query strings.
+
+---
