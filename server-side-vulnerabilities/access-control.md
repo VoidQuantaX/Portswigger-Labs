@@ -46,3 +46,54 @@ This lab highlights a *broken access control* vulnerability where an administrat
 - Monitor and log access attempts to restricted areas.  
 
 ---
+
+# Access Control – Lab 2: Unprotected Admin Functionality (via HTML Source)
+
+---
+
+## 🔹 Overview
+This lab demonstrates a *broken access control* vulnerability where an administrative panel was hidden in the HTML source code but not protected with any authentication or authorization mechanism.
+
+---
+
+## 🔹 Methodology
+
+1. *Reconnaissance*
+   - Viewed the page source (Ctrl+U).
+   - Found a hidden link pointing to /administrator-panel.
+
+2. *Exploitation*
+   - Accessed the hidden URL directly in the browser.
+   - The admin panel loaded without requiring admin credentials.
+
+3. *Privilege Escalation*
+   - Deleted the user carlos via the exposed admin functionality.  
+   - This confirmed that the application lacked proper access control.
+
+---
+
+## 🔹 Proof of Exploit
+![Hidden admin link in page source](../images/access-control-lab2-viewsource.png)  
+(Screenshot showing hidden admin link in HTML source)  
+
+![Lab solved – user deleted](../images/access-control-lab2-solved.png)  
+(Screenshot showing successful deletion of carlos account and lab completion)  
+
+---
+
+## 🔹 Security Impact
+- Unauthorized users could access administrative interfaces.  
+- Potential consequences include:
+  - Account deletions or modifications.  
+  - Full takeover of user data and application functionality.  
+  - Compromise of business-critical operations.  
+
+---
+
+## 🔹 Remediation
+- Enforce *server-side authentication and authorization checks*.  
+- Do not rely on obscurity (hiding links in HTML or JS).  
+- Restrict access to admin routes via RBAC, strong authentication, and network controls.  
+- Regularly review source code and remove hardcoded sensitive URLs.  
+
+---
