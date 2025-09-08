@@ -196,3 +196,76 @@ This lab demonstrates an *Insecure Direct Object Reference (IDOR)* / horizontal 
 - Implement logging/alerts for suspicious cross-user access patterns.
 
 ---
+
+# Access Control – Lab 5: Horizontal → Vertical Privilege Escalation
+
+---
+
+## 🔹 Overview
+This lab demonstrates how a *horizontal privilege escalation (IDOR)* can be chained into a *vertical escalation* by exposing admin credentials or sensitive fields.  
+An attacker who can view another user’s page (via IDOR) may find admin-only data (e.g., a prefixed/hidden password) and then log in as the administrator to gain full control.
+
+---
+
+## 🔹 Vulnerability
+The application identifies resources using a client-controllable parameter, for example:/my-account?id=wiener
+By substituting another user’s identifier (e.g., id=administrator), the application returns that user’s page. If that page contains *sensitive data* (hidden fields, prefilled passwords, tokens), an attacker can extract those values and *assume the higher-privilege identity*.
+
+---
+
+## 🔹 Methodology / Lab Walkthrough
+
+1. *Initial Access (Recon)*  
+   - Logged in as a normal user: wiener / peter.  
+   - Navigated to *My Account* and observed the account request:  
+     
+     GET /my-account?id=wiener
+     
+
+2. *Horizontal IDOR*  
+   - Captured the request in Burp Suite Proxy and replaced the id parameter with administrator:  
+     
+     GET /my-account?id=administrator
+     
+   - The server returned the administrator’s account page.
+
+3. *Discovery of Sensitive Data*  
+   - Inspected the returned HTML source and found the admin password present in a hidden/prefilled field.
+
+4. *Vertical Escalation (Account Takeover)*  
+   - Copied the administrator password from the source.  
+   - Logged out and re-authenticated as:  
+     
+     Username: administrator
+     Password: <retrieved-password>
+     
+   - Successfully logged in as the administrator.
+
+5. *Impactful Action (Proof of Compromise)*  
+   - Accessed the Admin Panel and performed an administrative action: *deleted user carlos*.  
+   - Lab solved ✅
+
+---
+
+## 🔹 Proof of Exploit
+![Retrieved admin password in page source](../images/access-control-lab5-password.png)  
+(Screenshot showing the admin page HTML source with the prefilled/hidden password field.)
+
+![Logged in as administrator / Admin panel action](../images/access-control-lab5-solved.png)  
+(Screenshot showing successful admin login and deletion of carlos.)
+
+---
+
+## 🔹 Security Impact
+- Exposing sensitive fields (passwords, tokens) in user-accessible pages allows attackers to *escalate privileges* from normal users to administrators.  
+- Consequences include complete application compromise, data loss, and unauthorized destructive actions.
+
+---
+
+## 🔹 Remediation
+- *Never* expose secrets in HTML (hidden fields, prefilled inputs, client-side JS).  
+- Enforce *server-side authorization* for every resource and action: resource.owner == session.user.  
+- Remove any sensitive values from client responses. Issue secrets only through secure, server-controlled channels.  
+- Monitor and log suspicious cross-account access attempts.
+
+---
