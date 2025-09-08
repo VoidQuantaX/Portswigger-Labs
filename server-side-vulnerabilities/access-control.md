@@ -146,3 +146,53 @@ By tampering with these parameters, an attacker can escalate privileges and gain
 - Use secure session handling instead of hidden fields or query strings.
 
 ---
+
+# Access Control – Lab 4: Horizontal Privilege Escalation (IDOR with GUIDs)
+
+---
+
+## 🔹 Overview
+This lab demonstrates an *Insecure Direct Object Reference (IDOR)* / horizontal privilege escalation where a normal user can access another user’s data by substituting identifiers (GUIDs) in requests. Even seemingly random GUIDs can be discovered elsewhere in the app (profiles, comments, links), allowing attackers to view or act on other users’ accounts.
+
+---
+
+## 🔹 Methodology
+
+1. *Reconnaissance*
+   - Logged in as wiener:peter.  
+   - Navigated to *My Account* and observed an account request containing my GUID (id=<my_GUID>).
+
+2. *Discovery of Target GUID*
+   - Browsed public pages (e.g., blog posts, comments) and found *Carlos’ GUID* exposed in a link or request.
+
+3. *Tampering the Request*
+   - Captured the /my-account?id=<my_GUID> request in Burp Proxy.  
+   - Replaced my GUID with Carlos’ GUID and resent the request.
+
+4. *Exploitation*
+   - The server returned Carlos’ account page data (API key, profile).  
+   - Submitted Carlos’ API key to the lab to complete the challenge.  
+   - Lab solved ✅
+
+---
+
+## 🔹 Proof of Exploit
+![Access to another user's account via GUID IDOR](../images/access-control-lab4-solved.png)  
+(Screenshot showing Carlos’ account page / API key returned after substituting GUID.)
+
+---
+
+## 🔹 Security Impact
+- Attackers can *read sensitive user data* (API keys, emails, personal info).  
+- Attackers can *modify or delete other users' data* if write actions are exposed.  
+- Compromise ranges from privacy breach to full account takeover and downstream escalation (API abuse, pivoting).
+
+---
+
+## 🔹 Remediation
+- Enforce *server-side object-level authorization*: always verify resource.owner == session.user.  
+- Do not trust client-supplied IDs for authorization decisions.  
+- Avoid exposing internal identifiers where possible; if required, validate ownership on every access.  
+- Implement logging/alerts for suspicious cross-user access patterns.
+
+---
