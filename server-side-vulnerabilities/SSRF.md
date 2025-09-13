@@ -112,13 +112,13 @@ The app has a stock-check feature (POST /product/stock) that accepts a stockApi 
   - Encoded: stockApi=http%3A%2F%2F192.168.0.68%2Fadmin
 - Send the request and inspect the returned HTML (Raw / Elements).
 
-![SSRF — fetched internal admin page via stockApi](../images/ssrf-lab-local-admin.png)  
+![SSRF — fetched internal admin page via stockApi](../images/ssrf-lab2-local-admin.png)  
 (Screenshot 1: server fetched internal admin HTML after stockApi was set to the admin URL.)
 
 4. *Inspect returned HTML / Elements*  
 - Search for delete, username=, action=, hidden tokens, JS-generated links.  
 - Copy the actionable URL (example):http://192.168.0.68:8080/admin/delete?username=carlos
-![SSRF — discovered delete link in returned HTML](../images/ssrf-lab-found-delete-link.png)  
+![SSRF — discovered delete link in returned HTML](../images/ssrf-lab2-found-delete-link.png)  
 (Screenshot 2: HTML/Elements view showing the /delete?username=carlos link.)
 
 5. *Exploit: trigger the action via SSRF*  
@@ -127,7 +127,7 @@ The app has a stock-check feature (POST /product/stock) that accepts a stockApi 
   - Encoded: stockApi=http%3A%2F%2F192.168.0.68%3A8080%2Fadmin%2Fdelete%3Fusername%3Dcarlos
 - Send the request — the server will perform the delete.
 
-![SSRF — triggered delete via stockApi, verified carlos removed](../images/ssrf-lab-triggered-delete.png)  
+![SSRF — triggered delete via stockApi, verified carlos removed](../images/ssrf-lab2-solved.png)  
 (Screenshot 3: final SSRF request/response showing the delete action executed and confirmation.)
 
 6. *Verify & collect evidence*  
