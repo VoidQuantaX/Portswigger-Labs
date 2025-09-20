@@ -15,7 +15,7 @@ Write-ups are organized by vulnerability categories:
 - [Access Control](server-side-vulnerabilities/access-control.md)
 - [Authentication](server-side-vulnerabilities/authentication.md)
 - [Server-Side Request Forgery (SSRF)](server-side-vulnerabilities/SSRF.md)
-- [File Upload Vulnerabilities](server-side-vulnerabilities/file-upload.md)
+- [File Upload Vulnerabilities](server-side-vulnerabilities/file-upload-vulnerabilities.md)
 - [OS Command Injection](server-side-vulnerabilities/OS-Command-Injection.md)
 - [SQL Injection](server-side-vulnerabilities/SQL-Injection.md) 
 
