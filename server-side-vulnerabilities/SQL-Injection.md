@@ -43,3 +43,52 @@ In this lab the category filter is concatenated into SQL; by altering the parame
 - Apply least privilege to DB user accounts and monitor for anomalous query patterns.
 
 ---
+
+# SQL Injection — Lab 2: Login Bypass / Subverting App Logic
+
+---
+
+## 🔹 One-line summary
+Bypass the login check by injecting a SQL comment/boolean into the username parameter (e.g. administrator'--) and gain access to the admin account.  
+
+---
+
+## 🔹 Overview
+A vulnerable login/account lookup concatenates user input into SQL. Injecting a comment or always-true boolean removes or bypasses the AND password = '...' check, letting the DB return the administrator row without the correct password.
+
+---
+
+## 🔹 Methodology (lab walk-through)
+- Capture the login flow and find the request that looks up the account (POST /login or subsequent GET /my-account?username=...).  
+- Force the account GET to appear by submitting a POST with username=administrator (no payload) and forward it.  
+- Modify the resulting GET (or the original POST if applicable) to inject:administrator'-- // or administrator' OR '1'='1'--
+[6:19 am, 23/09/2025] ‌‌: - Send the modified GET and inspect the response for admin content (dashboard / admin UI).
+
+---
+
+## 🔹 Proof
+![SQLi login bypass — manipulated GET showing administrator'-- payload](../images/sqli-lab2-injected-get.png)  
+(Screenshot: the modified GET /my-account?username=administrator'-- captured in Burp/Repeater — shows the payload used to bypass authentication.)
+
+---
+
+## 🔹 Impact
+- Immediate account takeover (often admin) → full application access.  
+- Data exposure, modification, and potential escalation to backend compromise.
+
+---
+
+## 🔹 Remediation (short)
+- Use *parameterized queries / prepared statements* for all DB access (never concatenate inputs).  
+- Do not rely on client-side or URL parameters to authorize access to sensitive account pages.  
+- Enforce server-side session ownership checks for account pages.
+
+---
+
+## 🔹 Pentest checklist
+- [x] Capture login/account lookup requests.  
+- [x] Test ', OR 1=1--, and comment variations in username.  
+- [x] Verify admin UI or privileged content appears.  
+- [x] Save raw request/response and include one strong screenshot (manipulated request).
+
+---
