@@ -7,7 +7,6 @@ Each lab follows a concise, recruiter-friendly format: *Overview → Methodology
 
 ## 📂 Repository Structure (ordered learning path)
 
-> Links are relative to this README. Filenames use lowercase + hyphens — update links if your files differ.
 
 ### 🔹 Server-Side Vulnerabilities (learning path)
 1. [SQL Injection](server-side-vulnerabilities/sql-injection.md)  
