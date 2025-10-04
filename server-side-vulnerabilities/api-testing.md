@@ -83,3 +83,79 @@ DELETE /api/users/carlos HTTP/2 Host: <lab-host> Cookie: session=<SESSION> Accep
 - [x] Verify impact, save raw request/response and one screenshot as PoC.
 
 ---
+
+# API Testing — Lab-2: Price Manipulation → Buy for $0
+
+---
+
+## 🔹 One-line summary
+Found a product price API and used a PATCH /api/products/{id}/price request to set the price to 0, then added the item to cart and completed checkout (PoC steps included).
+
+---
+
+## 🔹 Overview
+APIs expose server-side functionality (GET/PATCH/PUT/DELETE). Hidden or poorly protected mutation endpoints (price updates, role changes, discounts) let attackers change business logic and cause real financial loss. This lab demonstrates changing a product price to 0 and completing an order.
+
+---
+
+## 🔹 Methodology / Lab walkthrough (concise flow)
+- *Authenticate & capture* — log in (wiener:peter) with Burp Proxy ON; browse the product page to capture API calls.  
+- *Discover price endpoint* — observe GET /api/products/1/price (or similar) and forward it to Repeater to inspect returned JSON (field names).  
+- *Probe / switch method* — in Repeater change GET → PATCH, add header Content-Type: application/json to provoke helpful errors.  
+- *Learn parameter name from errors* — use error responses (e.g., ErrorPriceParameterMissingInBody) to identify expected JSON key (e.g., price).  
+- *Exploit* — send PATCH /api/products/1/price with body {"price":0} and confirm 200 OK.  
+- *Verify & purchase* — GET the price to confirm {"price":0}, add product to cart in browser, then checkout → order completes at $0 → lab solved.
+
+---
+
+## 🔹 Repeater-ready PoC (copy / paste & edit)
+PATCH /api/products/1/price HTTP/2 Host: <LAB_HOST> Cookie: session=<SESSION> Content-Type: application/json Accept: / Connection: close
+
+{"price":0}
+*Fallback (checkout discount method):*
+POST /api/checkout HTTP/2 Host: <LAB_HOST> Cookie: session=<SESSION> Content-Type: application/json Connection: close
+
+{"chosen_products":[{"product_id":"1","quantity":1}],"chosen_discount":{"percentage":100}}
+---
+
+## 🔹 Common responses & troubleshooting
+- 415 → wrong Content-Type; set application/json.  
+- 400 ErrorPriceParameterMissingInBody → use the indicated JSON key (price).  
+- 405 Method Not Allowed → try PUT/POST.  
+- 401/403 → must include valid session cookie.  
+- If price updates but checkout still charges full amount, check for separate price calculations at checkout or client-side price enforcement.
+
+---
+
+## 🔹 Proof
+![Price manipulation PoC — PATCH /api/products/1/price set to 0](../images/api-testing-price-patch.png)  
+(Screenshot: Repeater request showing PATCH /api/products/1/price with {"price":0} and the 200 OK response; follow-up screenshot of cart/checkout showing $0 order is recommended.)
+
+---
+
+## 🔹 Impact
+- Direct financial loss / fraud (orders placed at $0).  
+- Business-impact (revenue loss, accounting anomalies).  
+- Potential chain to further exploitation (mass price changes, inventory corruption).
+
+---
+
+## 🔹 Remediation (short)
+- Require server-side authorization for price changes and only allow privileged roles to mutate prices.  
+- Validate and whitelist JSON fields and types; reject unexpected fields.  
+- Remove or protect hidden admin endpoints in production.  
+- Log and alert on unusual mutation patterns (rapid PATCHes to price endpoints).  
+- Apply rate-limiting and anomaly detection for mutation endpoints.
+
+---
+
+## 🔹 Pentest checklist
+- [x] Crawl UI & JS for /api/ paths.  
+- [x] Capture product-related GETs to learn field names.  
+- [x] Try GET → PATCH/PUT/POST with Content-Type: application/json.  
+- [x] Use error messages to discover JSON keys.  
+- [x] Modify price → verify via GET, cart, and checkout.  
+- [x] Document requests/responses and include a screenshot of the successful price change and $0 checkout PoC.
+
+---
+
