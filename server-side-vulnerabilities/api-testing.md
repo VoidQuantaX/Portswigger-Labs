@@ -159,3 +159,78 @@ POST /api/checkout HTTP/2 Host: <LAB_HOST> Cookie: session=<SESSION> Content-Typ
 
 ---
 
+# Mass Assignment (Auto-Binding) — Lab-3: Force 100% Discount / Set item_price to 0
+
+---
+
+## 🔹 One-line summary
+Abused mass-assignment (auto-binding) by adding hidden fields from the API GET into the checkout POST — forced a 100% discount / item_price 0 and completed a $0 purchase. (PoC attached.)
+
+---
+
+## 🔹 Overview
+Mass assignment (auto-binding) occurs when a framework automatically maps request parameters onto internal model fields. If the server accepts unexpected fields (e.g., isAdmin, item_price, chosen_discount) without validation or authorization, attackers can change internal flags or business-critical values (price, discount) to cause privilege escalation or financial fraud.
+
+---
+
+## 🔹 Methodology / Lab walkthrough (concise flow)
+- *Authenticate & observe* — log in (e.g., wiener:peter) and add the target product to cart; capture API traffic in Burp.  
+- *Inspect object JSON* — send GET /api/checkout (or GET /cart) to Repeater and inspect returned JSON to find hidden keys (e.g., item_price, chosen_discount, percentage).  
+- *Capture the processing request* — perform the normal Place Order action and capture the POST /api/checkout request that the UI sends.  
+- *Edit request body* — in Repeater, replace the POST body with the JSON copied from the GET plus added hidden/modified fields (examples: {"chosen_products":[{"product_id":"1","quantity":1,"item_price":0}],"chosen_discount":{"percentage":100}}).  
+- *Send & verify response* — forward the modified POST; expect 200/201 confirming acceptance.  
+- *Confirm UI change* — refresh cart / checkout in the browser and complete purchase → order succeeds at $0. Document request/response and take screenshots.
+
+---
+
+## 🔹 Repeater-ready PoC examples
+
+*Give 100% discount*
+POST /api/checkout HTTP/1.1 Host: <LAB_HOST> Cookie: session=<SESSION> Content-Type: application/json Accept: / Connection: close
+
+{"chosen_products":[{"product_id":"1","quantity":1}],"chosen_discount":{"percentage":100}}
+*Set item_price = 0 (use exact field names from GET)*
+POST /api/checkout HTTP/1.1 Host: <LAB_HOST> Cookie: session=<SESSION> Content-Type: application/json Accept: / Connection: close
+
+{"chosen_discount":{"percentage":0},"chosen_products":[{"product_id":"1","quantity":1,"item_price":0}]}
+(Always copy exact keys/types from the GET response — JSON is case-sensitive.)
+
+---
+
+## 🔹 Proof (evidence)
+
+1. *Modified POST body* — added hidden fields copied from GET and changed price/discount:  
+   ![Modified POST body with hidden fields / mass assignment PoC](../images/mass-assignment-modified-body.png)
+
+2. *UI confirmation — $0 checkout / order success* — shows cart/receipt with price = $0:  
+   ![UI showing $0 order after mass-assignment PoC](../images/mass-assignment-ui-zero.png)
+
+---
+
+## 🔹 Impact
+- Financial fraud: orders at $0 (revenue loss) or mass price manipulation.  
+- Business-logic compromise: unauthorized privilege/flag changes (isAdmin, trusted, etc.).  
+- High real-world impact — immediate monetary loss or escalations.
+
+---
+
+## 🔹 Remediation (short)
+- *Whitelist* allowed fields server-side (deny everything else).  
+- Avoid automatic binding of all incoming parameters to models. Explicitly map permitted fields.  
+- Enforce authorization checks for sensitive fields (e.g., only admins may set price/isAdmin).  
+- Validate types & ranges (price ≥ 0; discounts bounded) and log anomalous mutation requests.  
+- Remove unused endpoints and test for hidden fields during code reviews.
+
+---
+
+## 🔹 Pentest checklist
+- [x] Capture GET that returns resource JSON — list candidate hidden fields.  
+- [x] Capture the POST/PATCH that applies the change (e.g., /api/checkout).  
+- [x] Recreate request in Repeater, add hidden fields exactly (keys & types).  
+- [x] Send request → verify success status and UI state change (cart/receipt).  
+- [x] Save raw request/response + screenshots (modified body + UI success) for PoC.
+
+---
+
+---
+
