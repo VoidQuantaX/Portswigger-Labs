@@ -1,121 +1,76 @@
-# Authentication Vulnerabilities – Username Enumeration & Password Brute-Force
+# Authentication Lab-1 — Username enumeration & Password brute-force
+
+---
+
+## 🔹 One-line summary
+Identified username enumeration via subtle response differences, then used password brute-force against the discovered account to gain access (PoC attached).
 
 ---
 
 ## 🔹 Overview
-Authentication vulnerabilities allow attackers to bypass login controls, impersonate users, and gain access to sensitive functionality.  
-This write-up focuses on *username enumeration* and *password brute-force* — a common attacker workflow: enumerate valid usernames first, then brute-force passwords for those accounts.
+Authentication verifies identity (username/password/MFA). Username enumeration leaks whether an account exists and drastically lowers attacker effort. Once a valid username is known, automated password guessing (brute-force / credential-stuffing) can lead to account takeover and further escalation.
 
 ---
 
-## 🔹 Why this is dangerous
-- Successful authentication bypass leads to account takeover, data theft, and privilege escalation.  
-- Username enumeration drastically reduces brute-force scope.  
-- Lack of rate limiting or account lockouts makes automated attacks practical.
+## 🔹 Methodology / Lab walkthrough (concise flow)
+- *Capture login flow* — with Burp Proxy ON, submit a normal login to capture POST /login (or equivalent).  
+- *Manual enumeration check* — in Repeater, replace username with a candidate and use a known-wrong password; observe response differences (status, content-length, headers).  
+- *Automated enumeration* — send the captured POST to Intruder with payloads on the username field (wordlist). Sort results by length/status to find the username that produces a different response (valid user).  
+- *Password brute-force* — send the login POST to Intruder with payloads on the password field (username fixed to discovered user). Use Sniper or appropriate attack type; detect success by different status/length/redirect/Set-Cookie.  
+- *Verify & document* — log in with the found credentials in the browser or Repeater, capture the successful response and screenshot the logged-in page. Save the raw request/response and screenshots as PoC.
 
 ---
 
-## 🔹 Methodology / Lab Walkthrough
+## 🔹 Repeater / Intruder PoC templates
+*Captured login POST (example)*
+POST /login HTTP/1.1 Host: <LAB_HOST> Content-Type: application/x-www-form-urlencoded Cookie: session=<SESSION>
 
-*Lab goal:* find a valid username (via enumeration), brute-force the password, and log in.
+username=<CANDIDATE>&password=wrongpassword
+*Intruder — username payload position*  
+Place §username§ at the username value and load wordlist of candidate usernames.
 
-1. *Capture baseline*
-   - Logged in as wiener:peter to capture a sample POST /login request and understand parameters.
-
-2. *Username enumeration (Burp Intruder / analysis)*
-   - Sent the login request to *Intruder* with payload position on the *username*.
-   - Kept password static and loaded a username wordlist.
-   - Observed responses (status codes, length, redirect differences) to identify valid username(s).
-   - *Found one username with a differing response length — this is the valid username.*
-
-   ![Username enumeration evidence — differing response length indicates valid user](../images/auth-lab-username-enum.png)
-
-3. *Password brute-force*
-   - Fixed the discovered username; placed payload position on *password* using a password wordlist.
-   - Ran Intruder and monitored for a different response (e.g., redirect, unique body) that indicates a successful guess.
-   - *Identified the correct password* from the intruder response.
-
-   ![Password discovered via brute-force (evidence)](../images/auth-lab-password-found.png)
-
-4. *Login & verification*
-   - Logged in with the discovered credentials and confirmed account access.
-   - Lab solved ✅
-
-   ![Successful login / lab solved (final proof)](../images/auth-lab-solved.png)
+*Intruder — password payload position*  
+Fix username to discovered account, place §password§ at password value and load password list.
 
 ---
 
-## 🔹 Security Impact
-- Account takeover leading to data theft, impersonation, fraud.  
-- Attackers can pivot from compromised accounts to escalate privileges or perform lateral actions.  
-- Automated attacks at scale become feasible without rate limiting and uniform error handling.
+## 🔹 Proof (evidence)
+1. *Username enumeration — differing response*  
+   ![Username enumeration — different status/length indicates valid user](../images/auth-lab-username-enum.png)  
+   (Screenshot: Intruder/Repeater results showing the username entry with a different status/content-length.)
+
+2. *Password brute-force — discovered correct password*  
+   ![Password brute-force — different response indicates correct password](../images/auth-lab-password-found.png)  
+   (Screenshot: Intruder/Repeater hit showing the request/response that indicates a successful login attempt for the discovered username.)
+
+3. *Lab solved — logged-in view / success page*  
+   ![Lab solved — logged-in dashboard / admin panel showing successful login](../images/auth-lab-solved.png)  
+   (Screenshot: browser showing the logged-in page or lab success confirmation.)
 
 ---
 
-## 🔹 Remediation & Best Practices
-- Implement *rate limiting* and account lockouts after multiple failed attempts.  
-- Use *generic error messages* (don’t reveal whether username vs password was wrong).  
-- Normalize response sizes and status codes to avoid leakage via response length or timing.  
-- Add *multi-factor authentication (MFA)* for high-privilege accounts.  
-- Monitor/auth-log suspicious login attempts and failed enumeration patterns.
+## 🔹 Impact
+- Fast account discovery → targeted attacks and credential stuffing.  
+- Account takeover leads to data theft, abuse of user privileges, and potential vertical escalation (admin takeover).  
+- Attackers can use valid accounts to bypass protections, access private features, or pivot.
 
 ---
 
-# Authentication – Lab: 2FA Bypass
+## 🔹 Remediation (short)
+- Return uniform error messages & HTTP status codes for authentication failures.  
+- Normalize response lengths and avoid side-channel leaks (timing, headers, redirects).  
+- Rate-limit and throttle login attempts by IP and account; enforce progressive delays and account lockouts.  
+- Enforce MFA for high-value accounts and strong password policies.  
+- Monitor/alert on enumeration/brute-force patterns and apply CAPTCHAs when abusive activity is detected.
 
 ---
 
-## 🔹 Overview
-This lab demonstrates a dangerous 2FA implementation mistake: the application issues a session cookie after username/password authentication *before* verifying the second factor. If sensitive pages trust only the presence of a session cookie (and not the completion of 2FA), an attacker can bypass the OTP step and access protected functionality.
-
----
-
-## 🔹 Vulnerability Summary
-Correct flow:
-1. Verify username & password  
-2. Verify one-time code/token  
-Only after both succeed should the session grant access.
-
-Vulnerable flow:
-- The app sets the session cookie immediately after step 1 and does not require proof of step 2 when accessing protected pages.  
-- Result: 2FA is effectively bypassable by navigating to protected resources after login.
-
----
-
-## 🔹 Lab Walkthrough
-
-1. *Login*  
-   - Logged in as carlos:montoya.  
-   - Observed POST /login → server returned 302 redirect to /login2 (the 2FA page).  
-   - Notably, a session cookie was already issued after the first step.
-
-2. *Skip 2FA*
-   - On /login2 (the OTP page) I did *not* submit a code.  
-   - Instead I clicked Home, then navigated to *My Account*.
-
-3. *Access Granted*
-   - The server checked only for a valid session cookie and did *not* verify completion of 2FA.  
-   - I was granted access to Carlos’ account page without entering the OTP — lab solved ✅.
-
----
-
-## 🔹 Proof of Exploit
-![2FA bypass proof — accessed account without submitting OTP](../images/auth-2fa-bypass-solved.png)  
-(Screenshot shows account page / dashboard accessed after skipping the OTP step. The session cookie was set post-login and the second factor was not enforced.)
-
----
-
-## 🔹 Security Impact
-- 2FA provides no protection if the server trusts the session cookie before second-factor validation.  
-- Attackers who obtain credentials (phishing, leaks) can bypass 2FA just by logging in and navigating to protected endpoints.  
-- Consequences: account takeover, data theft, privilege escalation, and loss of user trust.
-
----
-
-## 🔹 Remediation
-- Do *not* establish a session as fully authenticated until 2FA has been verified server-side.  
-- Mark session state with explicit flags, e.g. session.authenticated = true only after OTP validation; else use session.partial_auth = true and restrict sensitive endpoints.  
-- Enforce checks on every protected endpoint that require a 2FA-verified session.  
-- Consider short-lived tokens for the post-password/pre-2FA state and strict server-side validation for sensitive actions.
+## 🔹 Pentest checklist
+- [x] Capture login requests and identify username param.  
+- [x] Try manual enumeration in Repeater (wrong password).  
+- [x] Automate enumeration with Intruder; sort by length/status.  
+- [x] Brute-force password for confirmed username with Intruder (Sniper).  
+- [x] Verify successful login, save raw request/response and screenshots.  
+- [x] Recommend mitigation steps and re-test after fixes.
 
 ---
