@@ -193,3 +193,129 @@ username=found_user&password=§password_payload§
 - [ ] Report with remediation steps.
 
 ---
+
+# Authentication Lab-3 — Username enumeration via response timing (IP rotation) 
+
+---
+
+## 🔹 One-line summary
+Enumerate a valid username using subtle response timing differences (amplified by long passwords), rotate IP via X-Forwarded-For to bypass IP lockout, then brute-force the discovered user’s password and log in. (Exact steps — copy/paste ready.)
+
+---
+
+## 🔹 Overview
+This lab uses timing differences (and optional IP rotation via X-Forwarded-For) to detect valid usernames that return subtly different server processing times. Once a username is confirmed, rotate source IPs when brute-forcing the password to avoid IP-based lockouts. Use Intruder (Pitchfork / Cluster Bomb) with amplified requests to reliably spot timing signals.
+
+---
+
+## 🔹 Methodology / Lab walkthrough (exact steps)
+
+1. *Capture a fresh login POST*  
+   - Proxy ON. Submit the login form once to capture POST /login.  
+   - Right-click the captured request → *Send to Repeater*.
+
+2. *Confirm X-Forwarded-For support*  
+   - In Repeater add header X-Forwarded-For: 203.0.113.55 → *Send*.  
+   - If lockout behavior changes, IP rotation is possible. If not, IP lockout may be per-account — proceed with caution.
+
+3. *Send request to Intruder*  
+   - Repeater → *Send to Intruder*.
+
+4. *Positions — prepare enumeration (Pitchfork)*  
+   - Positions → Clear markers.  
+   - Add marker 1 on the last octet part of X-Forwarded-For: 203.0.113.§IP§ (Payload set 1).  
+   - Add marker 2 on username (Payload set 2).  
+   - Set password to a long constant (≈100–400 a chars) to amplify server processing time.
+
+5. *Payloads for enumeration*  
+   - Payload set 1 (IP octets): Numbers 1..N (or a small IP list).  
+   - Payload set 2 (usernames): load candidate_usernames.txt.  
+   - Attack type: *Pitchfork* (pairs IP[i] with USER[i]).  
+   - Options: Throttle 300–500 ms, Timeout 10–15 s, Follow redirects OFF.
+
+6. *Run & inspect timing*  
+   - Start the attack. Enable timing columns (Response completed / Time).  
+   - Sort by Response Time; look for a username with consistently higher response time (or unique response size).
+
+7. *Confirm candidate*  
+   - Click the candidate row → Send to Repeater → resend 2–3× to confirm consistent timing or body difference.
+
+8. *Prepare brute-force (Cluster Bomb — IP × password)*  
+   - Get a fresh POST /login into Repeater (fresh CSRF/session). → Send to Intruder.  
+   - Positions: add marker for X-Forwarded-For: §IP§ (payload set 1) and marker on password=§PASSWORD§ (payload set 2). Keep username=identified-user fixed.  
+   - Payload set 1: list of IPs (ips.txt) or number range.  
+   - Payload set 2: candidate_passwords.txt.  
+   - Attack type: *Cluster Bomb*. Throttle 400–700 ms, Timeout 10–15 s. Run a small smoke test first.
+
+9. *Detect success & verify*  
+   - Watch for Status = 302, Set-Cookie, Location: /my-account or reduced Length.  
+   - Click the hit → open Raw → replay in Repeater or browser.  
+   - Verify login and capture the logged-in UI screenshot (lab solved). Save raw request/response.
+
+---
+
+## 🔹 Repeater / Intruder templates (paste & edit)
+
+*Enumeration (Pitchfork — password amplifier)*
+
+POST /login HTTP/1.1 Host: <LAB_HOST> X-Forwarded-For: 203.0.113.§IP§ Content-Type: application/x-www-form-urlencoded Cookie: session=<SESSION>
+
+username=§USERNAME§&password=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+- Payload set 1 (IP): Numbers 1..N or ips.txt  
+- Payload set 2 (USERNAME): candidate_usernames.txt  
+- Attack type: Pitchfork
+
+*Brute-force (Cluster Bomb — rotate IP × password)*
+POST /login HTTP/1.1 Host: <LAB_HOST> X-Forwarded-For: §IP§ Content-Type: application/x-www-form-urlencoded Cookie: session=<SESSION>
+
+username=identified-user&password=§PASSWORD§
+
+- Payload set 1 (IP): ips.txt  
+- Payload set 2 (PASSWORD): candidate_passwords.txt  
+- Attack type: Cluster Bomb
+
+---
+
+## 🔹 Troubleshooting & tips
+- No timing signal → increase password length (400–800 `a`s) and re-test a small subset.  
+- Too many timeouts/errors → increase throttle or reduce IP set.  
+- CSRF/tokens rotate → always start Intruder runs from a fresh Repeater capture.  
+- If IP rotation not usable, consider lower-volume brute-force with long delays and monitoring.
+
+---
+
+## 🔹 Proof (screenshots)
+1. *Username enumeration — timing outlier*  
+   ![Username timing outlier found](../images/auth-timing-username-found.png)
+
+2. *Password brute-force hit (rotated IP)*  
+   ![Password brute-force success (rotated IP)](../images/auth-timing-password-found.png)
+
+3. *Lab solved — logged-in target account*  
+   ![Lab solved — lateral access / account page](../images/auth-timing-lab-solved.png)
+
+---
+
+## 🔹 Impact
+- Account takeover; lateral access to user data and further escalation.  
+- If repeated at scale, can lead to mass account compromise.
+
+---
+
+## 🔹 Remediation (short)
+- Normalize login failure responses (no timing/behavior differences).  
+- Reject/monitor suspicious ips / X-Forwarded-For header usage; validate proxy headers.  
+- Implement per-account rate-limits and progressive delays; require MFA for sensitive accounts.  
+- Log and alert on unusual IP rotation patterns.
+
+---
+
+## 🔹 Pentest checklist
+- [ ] Confirm X-Forwarded-For behavior.  
+- [ ] Run Pitchfork username enumeration (long password amplifier).  
+- [ ] Confirm candidate username by replaying.  
+- [ ] Run Cluster Bomb for password × IP rotation (small smoke test first).  
+- [ ] Verify login & capture PoC (raw request/response + screenshots).
+
+---
