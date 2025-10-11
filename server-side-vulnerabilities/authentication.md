@@ -75,7 +75,7 @@ Fix username to discovered account, place §password§ at password value and loa
 
 ---
 
-# Authentication Lab 2 — Username enumeration via subtle response differences (exact playbook)
+# Authentication Lab 2 — Username enumeration via subtle response differences 
 
 ---
 
@@ -89,7 +89,7 @@ This lab demonstrates username enumeration using tiny response differences (cont
 
 ---
 
-## 🔹 Methodology / Lab walkthrough (exact steps)
+## 🔹 Methodology / Lab walkthrough 
 1. *Capture a fresh login POST*  
    - Proxy ON, Intercept OFF. Submit the login form to capture POST /login.  
    - Right-click the captured request → *Send to Intruder*.
@@ -131,7 +131,7 @@ This lab demonstrates username enumeration using tiny response differences (cont
 
 ---
 
-## 🔹 Repeater / Intruder templates (copy/paste & edit)
+## 🔹 Repeater / Intruder templates 
 
 *Baseline login POST (example)*
 POST /login HTTP/1.1 Host: <LAB_HOST> Content-Type: application/x-www-form-urlencoded Cookie: session=<SESSION>
@@ -184,7 +184,7 @@ username=found_user&password=§password_payload§
 
 ---
 
-## 🔹 Pentest checklist (copyable)
+## 🔹 Pentest checklist 
 - [ ] Capture login POST → send to Intruder.  
 - [ ] Run username enumeration with Grep-Extract (include punctuation/whitespace).  
 - [ ] Narrow candidates and confirm username.  
