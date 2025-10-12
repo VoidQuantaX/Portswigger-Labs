@@ -319,3 +319,108 @@ username=identified-user&password=§PASSWORD§
 - [ ] Verify login & capture PoC (raw request/response + screenshots).
 
 ---
+
+# Broken brute-force protection — Lab-4: bypass lockout by alternating successful logins
+
+---
+
+## 🔹 One-line summary
+By interleaving successful logins for an attacker account (wiener:peter) with guesses for the victim (carlos:<wordlist>), the server’s brute-force counter never reaches the block threshold — resulting in a successful password guess for the victim (PoC attached).
+
+---
+
+## 🔹 Overview
+Brute-force protection should limit repeated login attempts per account and/or per IP. If the protection logic resets counters incorrectly (for example, when an unrelated account logs in), an attacker can keep guessing while avoiding lockout. This lab shows how to exploit that logic flaw by alternately authenticating a safe account and guessing the target account.
+
+---
+
+## 🔹 High-level idea
+Alternate a valid attacker login (to reset or avoid IP block) with one guess for the victim account — send the requests sequentially so the server never accumulates enough consecutive failures to block the IP.
+
+---
+
+## 🔹 Methodology / Lab walkthrough (exact flow)
+1. *Capture a fresh login POST*  
+   - Proxy ON; perform a normal login to capture POST /login (fresh CSRF/session).  
+   - Right-click captured request → *Send to Intruder*.
+
+2. *Prepare aligned payload lists*  
+   - usernames_alternating.txt: lines alternate wiener, carlos, wiener, carlos, ... (start with wiener).  
+   - passwords_alternating.txt: lines alternate peter, <guess1>, peter, <guess2>, ... (every wiener line corresponds to peter).
+
+3. *Intruder positions*  
+   - Positions → Clear markers.  
+   - Mark username as payload position 1 and password as payload position 2:  
+     username=§1§&password=§2§
+
+4. *Load payloads & set attack type*  
+   - Payload position 1 → Simple list → load usernames_alternating.txt.  
+   - Payload position 2 → Simple list → load passwords_alternating.txt.  
+   - Attack type → *Pitchfork* (pairs nth username with nth password).
+
+5. *Enforce sequential requests*  
+   - Resource pool / Threads = 1 (maximum concurrent requests = 1) so requests are strictly sequential.  
+   - Options: Throttle ≈ 300–500 ms, Timeout 10–15 s, Follow redirects = OFF.
+
+6. *Run attack & look for success*  
+   - Start the attack. Because wiener:peter appears regularly, the server’s block counter should not reach the threshold.  
+   - Filter or sort results to hide normal failures and inspect rows for carlos producing a success indicator (e.g., 302, Location: /my-account, Set-Cookie).
+
+7. *Verify & PoC*  
+   - Right-click the hit → *Send to Repeater* → *Send* once → confirm 302 + Location/Set-Cookie.  
+   - Login in a browser or replay Repeater to confirm access and lab solved. Save the raw request/response and one screenshot (PoC).
+
+---
+
+## 🔹 Repeater / Intruder template (copy/paste & edit)
+
+*Intruder base*
+
+POST /login HTTP/1.1 Host: <LAB_HOST> Content-Type: application/x-www-form-urlencoded Cookie: session=<SESSION> User-Agent: ... Accept: / Connection: close
+
+username=§1§&password=§2§
+
+*Example small payload sample*
+
+usernames_alternating.txt wiener carlos wiener carlos ...
+
+passwords_alternating.txt peter 123456 peter password ...
+
+---
+
+## 🔹 What to look for (success signals)
+- HTTP 302 redirect to account page (Location: /my-account).  
+- Set-Cookie: session=... present in response.  
+- Response Length / Status different compared to failures.
+
+---
+
+## 🔹 Proof / Evidence
+
+*PoC — successful victim login (302 response)*  
+Screenshot shows the Intruder/Repeater row where the victim account returned a 302 (Location / Set-Cookie), proving the brute-force succeeded while alternating attacker logins prevented lockout.  
+![Broken brute-force PoC — victim 302 hit](../images/bf-broken-protection.png)
+
+## 🔹 Impact
+- Account takeover of the targeted user → data theft, fraud, escalation.  
+- If repeated, can lead to mass compromise of user accounts in a system with the same flawed logic.
+
+---
+
+## 🔹 Remediation (short)
+- Scope counters correctly (per-account and/or per-IP) and *do not* reset failure counters based on unrelated successful logins.  
+- Use progressive delays and exponential backoff; lockout should not be reset by unrelated events.  
+- Require MFA for sensitive accounts.  
+- Monitor and alert on alternating-success patterns and unusual sequences of login attempts.
+
+---
+
+## 🔹 Pentest checklist (copyable)
+- [ ] Confirm lockout threshold (fail X times → blocked).  
+- [ ] Test whether successful login for other account resets counters.  
+- [ ] Build alternating lists and run Pitchfork with threads = 1.  
+- [ ] Identify the 302 Hit for victim credentials.  
+- [ ] Verify in browser; save PoC (raw request/response + screenshot).  
+- [ ] Report with remediation.
+
+---
