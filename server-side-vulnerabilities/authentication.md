@@ -254,7 +254,7 @@ This lab uses timing differences (and optional IP rotation via X-Forwarded-For) 
 
 ---
 
-## 🔹 Repeater / Intruder templates (paste & edit)
+## 🔹 Repeater / Intruder templates 
 
 *Enumeration (Pitchfork — password amplifier)*
 
@@ -372,7 +372,7 @@ Alternate a valid attacker login (to reset or avoid IP block) with one guess for
 
 ---
 
-## 🔹 Repeater / Intruder template (copy/paste & edit)
+## 🔹 Repeater / Intruder template 
 
 *Intruder base*
 
@@ -415,7 +415,7 @@ Screenshot shows the Intruder/Repeater row where the victim account returned a 3
 
 ---
 
-## 🔹 Pentest checklist (copyable)
+## 🔹 Pentest checklist 
 - [ ] Confirm lockout threshold (fail X times → blocked).  
 - [ ] Test whether successful login for other account resets counters.  
 - [ ] Build alternating lists and run Pitchfork with threads = 1.  
