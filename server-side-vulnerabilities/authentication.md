@@ -486,7 +486,7 @@ Some applications reveal account existence via lockout behaviour: after *N* fail
 
 ---
 
-## 🔹 Repeater / Intruder templates (copy/paste & edit)
+## 🔹 Repeater / Intruder templates 
 
 *Cluster Bomb enumeration (positions)*
 
@@ -532,7 +532,7 @@ username=<confirmed-username>&password=§1§
 
 ---
 
-## 🔹 Pentest checklist (copyable)
+## 🔹 Pentest checklist 
 - Capture fresh login request (fresh CSRF/session).  
 - Cluster Bomb: usernames × Null payloads (*N* = lock threshold).  
 - Identify locked usernames from outlier responses.  
@@ -541,7 +541,7 @@ username=<confirmed-username>&password=§1§
 
 ---
 
-# User Rate Limiting & HTTP Basic Authentication — Notes (PortSwigger style)
+# User Rate Limiting & HTTP Basic Authentication — Notes 
 
 ---
 
@@ -613,7 +613,7 @@ The header is created by concatenating username:password and base64-encoding the
 - Inspect application behaviour when supplying invalid vs valid credentials (look for enumeration signals).  
 - Confirm whether the site accepts credentials over plain HTTP or enforces TLS/HSTS.
 
-### Remediation (recommendations)
+### Remediation 
 - Avoid using HTTP Basic Auth for user-facing authentication. Use modern session or token-based authentication (OAuth2, JWT with proper controls) instead.  
 - Enforce HTTPS + HSTS for any Basic Auth use (never send credentials over plain HTTP).  
 - Implement rate-limiting, account lockouts, and CAPTCHA for Basic Auth protected endpoints.  
@@ -622,3 +622,124 @@ The header is created by concatenating username:password and base64-encoding the
 
 ---
 
+# 2FA bypass Lab-6 — Session issued before OTP — Notes (PortSwigger style)
+
+---
+
+## 🔹 One-line summary
+If the server issues a fully authenticated session (cookie/token) immediately after password validation — before verifying the OTP — an attacker can reuse that session to access protected pages and bypass 2FA.
+
+---
+
+## 🔹 What is this vulnerability?
+When the server sets a session cookie or issues an auth token as soon as the password step succeeds (and before the 2FA/OTP step), that session can be used on protected endpoints without supplying the second factor. This defeats the whole point of 2FA.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- Full account takeover despite 2FA being enabled.  
+- Read sensitive data, change account details, abuse features.  
+- Gives a false sense of security while the implementation is broken.
+
+---
+
+## 🔹 Quick technical summary
+Typical bad flow:
+1. POST /login with username+password → server validates password.  
+2. Server sets Set-Cookie (session) or returns a token and redirects to /2fa.  
+3. Before OTP verification, that session can access /my-account and other protected endpoints — attacker reuses the session and bypasses OTP.
+
+The exploit: capture the session token from the POST /login response and reuse it on protected endpoints.
+
+---
+
+## 🔹 Top priority endpoints to check
+- POST /login, POST /session, POST /authenticate  
+- GET /2fa, POST /2fa (OTP verify)  
+- GET /my-account, /inbox, /messages, /dashboard  
+- POST /api/login, token endpoints, SSO callbacks
+
+---
+
+## 🔹 Lab walkthrough — exact, copy-paste friendly methodology
+
+1. *Capture a fresh login POST*  
+   - In browser submit the victim credentials (do not enter OTP). Capture POST /login in Burp Proxy.
+
+2. *Send the password POST to Repeater*  
+   - Proxy → HTTP history → find the POST /login → *Send to Repeater*.
+
+3. *Inspect the login response for a session / token*  
+   - In Repeater click *Send* and check Response headers for Set-Cookie: <name>=<value> or check the body for a JSON token.  
+   - If not in the immediate response, check the subsequent redirect response(s) in Proxy history.
+
+4. *Replay a protected GET using the copied session*  
+   - Create a GET /my-account in Repeater and add header:  
+     Cookie: session=<PASTED_SESSION_VALUE>  
+   - *Send*. If you receive the account page (200 + victim data) without entering OTP — bypass confirmed.
+
+5. *Alternative: follow redirect*  
+   - Replay the redirect URL returned by login with the copied cookie (some apps require following flow).
+
+6. *Record proof*  
+   - Save raw POST /login + response (shows Set-Cookie).  
+   - Save raw GET /my-account + response using the session (shows victim data).  
+   - Screenshot the account/inbox page. These are your PoC artifacts.
+
+7. *Optional checks*  
+   - Test other protected endpoints with same cookie to confirm scope.  
+   - Do not perform destructive actions; collect evidence only.
+
+---
+
+## 🔹 Repeater / PoC templates 
+
+*Captured password POST (example)*  
+(replace with your captured request when reporting)
+
+POST /login HTTP/1.1 Host: <LAB_HOST> Content-Type: application/x-www-form-urlencoded
+
+username=carlos&password=montoya
+
+*Protected page GET (use session from POST response)*
+
+GET /my-account HTTP/1.1 Host: <LAB_HOST> Cookie: session=<SESSION_VALUE_FROM_LOGIN> User-Agent: Mozilla/5.0 Accept: text/html Connection: close
+
+If the GET returns account content without OTP, the vulnerability is confirmed.
+
+---
+
+## 🔹 Proof / Evidence
+
+1. *Captured login response (session issued)* — shows the POST /login response headers containing Set-Cookie (session) and related headers used to build the authenticated request.  
+   ![Login response — session captured](../images/2fa-post-response.png)
+
+2. *Replayed GET with copied session (bypass)* — shows the modified GET /my-account response using the session value copied from the POST /login response; confirms access without OTP.  
+   ![GET with pasted session — account accessed](../images/2fa-get-with-session.png)
+
+---
+
+## 🔹 Detection indicators (what defenders see)
+- Set-Cookie or token issued on password validation response.  
+- Access to protected endpoints using a session issued before 2FA completion.  
+- Logs showing session creation without 2FA event.
+
+---
+
+## 🔹 Quick remediation checklist
+- *Do not* issue a full auth session until 2FA is verified.  
+- Use a short-lived, limited “pre-auth” token that cannot access protected resources.  
+- Promote session only after OTP verification; make pre-auth tokens distinct (different cookie name / restricted scope).  
+- Ensure protected endpoints check a server-side mfa_completed flag.  
+- Normalize responses/timing during 2FA flow to avoid leaking state.
+
+---
+
+## 🔹 Pentest checklist 
+1. Capture POST /login using victim creds (don’t enter OTP).  
+2. Inspect response headers/body for Set-Cookie / tokens.  
+3. Replay protected GETs with the found token to verify bypass.  
+4. Save raw req/resp (login + protected GET) and a screenshot as PoC.  
+5. Recommend pre-auth tokens + server-side 2FA checks.
+
+---
