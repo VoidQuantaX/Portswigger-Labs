@@ -540,3 +540,85 @@ username=<confirmed-username>&password=§1§
 - Verify; save raw requests/responses + screenshots for PoC.
 
 ---
+
+# User Rate Limiting & HTTP Basic Authentication — Notes (PortSwigger style)
+
+---
+
+## 🔹 One-line summary
+User rate limiting and HTTP Basic Authentication are two common authentication-related behaviours/defences — rate limiting helps slow brute-force attempts while HTTP Basic Auth is a simple, legacy scheme that often lacks modern protections. Both have important weaknesses an attacker can exploit if misconfigured.
+
+---
+
+## 🔹 User rate limiting
+
+### What is it?
+User rate limiting blocks or slows requests from an IP (or other client identifier) that sends too many login attempts in a short period. Unblocking typically occurs by:
+- automatic expiry after a timeout, or  
+- manual admin intervention, or  
+- successful CAPTCHA / challenge completion by the user.
+
+### Why it matters (real-world risk)
+- Rate limiting reduces brute-force velocity but can still be bypassed (IP spoofing, proxy rotation, header manipulation).  
+- If implemented per-account, it can enable username enumeration.  
+- If implemented per-IP, a distributed attack (many IPs) or IP rotation can bypass it.  
+- Poor implementations may allow an attacker to pack multiple guesses into a single request (application-specific weaknesses).
+
+### Common bypass techniques
+- Rotate outgoing IP via proxies / botnets / X-Forwarded-For header (if the server trusts it).  
+- Use parallel distributed requests from many IPs.  
+- Find ways to submit multiple password guesses in a single request (application-specific chaining).  
+- Interleave legitimate actions (e.g., successful login to another account) to reset counters (logic flaws).
+
+### Testing checklist
+- Verify the lockout threshold and block duration.  
+- Test per-IP vs per-account behaviour (does a blocked IP affect other accounts?).  
+- Test X-Forwarded-For / X-Real-IP handling — does the app trust client-supplied headers?  
+- Attempt low-volume distributed guessing (simulate different source IPs) to see if the limit is per-IP only.  
+- Try to place multiple guesses inside one request if the app accepts batched/compound inputs.
+
+### Remediation (recommendations)
+- Prefer per-account rate limiting combined with progressive delays and exponential backoff.  
+- Do not rely on client-supplied headers for source IP (validate/load-balancer config).  
+- Add CAPTCHAs or challenge-based hurdles after suspicious activity.  
+- Implement global anomaly detection and per-user + per-IP throttling.  
+- Log & alert on distributed or alternating attack patterns.
+
+---
+
+## 🔹 HTTP Basic Authentication
+
+### What is HTTP Basic Auth?
+A simple HTTP authentication scheme where the client sends credentials in the Authorization header on every request:
+
+Authorization: Basic <base64(username:password)>
+
+The header is created by concatenating username:password and base64-encoding the result.
+
+### Why it matters (real-world risk)
+- Credentials are transmitted on every request — if TLS is absent or misconfigured, credentials are trivial to intercept.  
+- Often paired with sites that lack modern defenses (no rate limiting, no account lockouts, etc.).  
+- Basic Auth tokens are static and therefore trivially brute-forceable if the server does not implement protections.  
+- Basic Auth does not provide CSRF protections by itself (browsers attach Authorization automatically in some contexts), increasing CSRF risk.
+
+### Common pitfalls / attack vectors
+- No TLS / incomplete HSTS → credentials exposed to MitM.  
+- No brute-force/lockout protections on the endpoint that consumes the Authorization header.  
+- Reuse of credentials across services — compromise of one service leaks credentials usable elsewhere.  
+- Basic auth endpoints sometimes serve low-visibility admin pages which still hold sensitive functionality or data.
+
+### Detection & testing
+- Check for WWW-Authenticate: Basic responses on endpoints.  
+- Attempt brute-force against the Basic Auth endpoint (use slow, careful testing to avoid service disruption).  
+- Inspect application behaviour when supplying invalid vs valid credentials (look for enumeration signals).  
+- Confirm whether the site accepts credentials over plain HTTP or enforces TLS/HSTS.
+
+### Remediation (recommendations)
+- Avoid using HTTP Basic Auth for user-facing authentication. Use modern session or token-based authentication (OAuth2, JWT with proper controls) instead.  
+- Enforce HTTPS + HSTS for any Basic Auth use (never send credentials over plain HTTP).  
+- Implement rate-limiting, account lockouts, and CAPTCHA for Basic Auth protected endpoints.  
+- Where Basic Auth is required (e.g., internal services), restrict access by IP/ACLs and require additional layers (VPN, mTLS).  
+- Log and monitor access attempts to Basic Auth endpoints for brute-force or anomalous patterns.
+
+---
+
