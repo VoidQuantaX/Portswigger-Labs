@@ -507,6 +507,16 @@ username=<confirmed-username>&password=§1§
 
 ---
 
+## 🔹 Proof / Evidence
+
+1. *Username locked (enumeration PoC)* — shows the Intruder row where the username hit the lock threshold (Nth attempt).  
+   ![Username locked — enumeration PoC](../images/account-lock-username-found.png)
+
+2. *Password found (brute-force PoC)* — shows the Intruder/Repeater row where the correct password produced a 302 (Location / Set-Cookie), confirming login.  
+   ![Password found — brute-force PoC](../images/account-lock-password-found.png)
+
+---
+
 ## 🔹 What to look for (signals)
 - Response body text containing lock message (exact string).  
 - Content-Length change for the Nth attempt.  
@@ -530,13 +540,3 @@ username=<confirmed-username>&password=§1§
 - Verify; save raw requests/responses + screenshots for PoC.
 
 ---
-
-## 🔹 Proof / Evidence
-
-*1) Username locked (enumeration PoC)*  
-Screenshot: images/account-lock-username-found.png  
-Caption: Intruder row showing the username that produced the lock response on the Nth attempt.
-
-*2) Password found (brute-force PoC)*  
-Screenshot: images/account-lock-password-found.png  
-Caption: Intruder/Repeater row showing the successful password guess (302 / Set-Cookie) for the confirmed username.
