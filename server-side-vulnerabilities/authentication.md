@@ -622,7 +622,7 @@ The header is created by concatenating username:password and base64-encoding the
 
 ---
 
-# 2FA bypass Lab-6 — Session issued before OTP — Notes (PortSwigger style)
+# 2FA bypass Lab-6 — Session issued before OTP — Notes 
 
 ---
 
