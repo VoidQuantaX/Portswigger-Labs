@@ -424,3 +424,119 @@ Screenshot shows the Intruder/Repeater row where the victim account returned a 3
 - [ ] Report with remediation.
 
 ---
+
+# Account-lock Username Enumeration — Lab-5: repeat each username N times (Cluster Bomb + Null payloads)
+
+---
+
+## 🔹 One-line summary
+Repeat each username exactly *N* times (the account-lock threshold) to trigger a lock response for real accounts, then brute-force the confirmed username’s password. (Copy-paste ready.)
+
+---
+
+## 🔹 Overview
+Some applications reveal account existence via lockout behaviour: after *N* failed attempts a specific “locked” response appears. By sending every username *N* times and detecting that lock response, an attacker can enumerate valid accounts and then brute-force the confirmed account.
+
+---
+
+## 🔹 Methodology / Lab walkthrough (exact steps)
+1. *Capture a fresh login POST*  
+   - Proxy *ON*; submit an invalid login to capture POST /login (fresh CSRF/session).  
+   - Right-click → *Send to Intruder*.
+
+2. *Positions — set markers exactly*  
+   - Intruder → *Positions* → Clear markers.  
+   - Mark *username* as payload *pos 1* and *password* as payload *pos 2*.  
+   - Add a second (null) payload marker immediately after the password so the body looks like:  
+     
+     username=§1§&password=example§§
+     
+     (the second § is the null payload used to repeat each username *N* times).
+
+3. *Payloads — Cluster Bomb with null generator*  
+   - Attack type → *Cluster Bomb*.  
+   - Payload 1 → *Simple list* → load usernames.txt.  
+   - Payload 2 → *Null payloads* → *Generate N payloads = 5* (set *N* to the lab threshold).  
+   - Preview should show total payloads = #usernames × N.
+
+4. *Execution options*  
+   - Threads / Resource pool = *1* (strict sequential sending).  
+   - Throttle ≈ *300–500 ms*.  
+   - Timeout *10–15 s*.  
+   - Follow redirects = *OFF*.
+
+5. *Run attack*  
+   - Each username will be sent *N* times in sequence (same password).  
+   - Inspect results for outliers: responses that contain the lock message (e.g., “You have made too many incorrect login attempts.”) or show different *Length/Status*.
+
+6. *Confirm locked username*  
+   - Right-click an outlier → *Show response* → verify the lock text/indicator. Note the username.
+
+7. *Brute-force the confirmed account (Sniper)*  
+   - Capture a fresh POST /login → Send to Intruder.  
+   - Positions: fix username=<confirmed> (no marker) and mark password=§1§.  
+   - Payload → Simple list → candidate_passwords.txt.  
+   - Attack type → *Sniper*, Threads = 1, Throttle 300–500 ms, Follow redirects = OFF.  
+   - Optionally add a Grep-Extract for the lock message to highlight rows that *do not* contain it.
+
+8. *Verify & PoC*  
+   - Right-click the hit → *Send to Repeater* → *Send* once → confirm 302 / Location / Set-Cookie.  
+   - Log in in browser with the found credentials (wait unlock time if required).  
+   - Save the successful raw request/response and screenshots.
+
+---
+
+## 🔹 Repeater / Intruder templates (copy/paste & edit)
+
+*Cluster Bomb enumeration (positions)*
+
+POST /login HTTP/1.1 Host: <LAB_HOST> Content-Type: application/x-www-form-urlencoded Cookie: session=<SESSION>
+
+username=§1§&password=example§§
+
+- Payload pos 1 → usernames.txt  
+- Payload pos 2 → Null payloads → Generate *N* = <lock threshold>
+
+*Sniper (password brute-force for confirmed username)*
+
+POST /login HTTP/1.1 Host: <LAB_HOST> Content-Type: application/x-www-form-urlencoded Cookie: session=<SESSION>
+
+username=<confirmed-username>&password=§1§
+
+- Payload pos 1 → candidate_passwords.txt
+
+---
+
+## 🔹 What to look for (signals)
+- Response body text containing lock message (exact string).  
+- Content-Length change for the Nth attempt.  
+- Status differences or timing changes.
+
+---
+
+## 🔹 Remediation (short)
+- Do *not* reveal lock state in response bodies/headers/timings.  
+- Use identical, generic failure messages for invalid credentials and locked states.  
+- Scope lockouts properly (per-account and/or per-IP) and avoid attacker-controllable reset triggers.  
+- Use progressive delays, MFA for high-value users, monitoring and alerts on enumeration patterns.
+
+---
+
+## 🔹 Pentest checklist (copyable)
+- Capture fresh login request (fresh CSRF/session).  
+- Cluster Bomb: usernames × Null payloads (*N* = lock threshold).  
+- Identify locked usernames from outlier responses.  
+- Sniper brute-force confirmed username’s password.  
+- Verify; save raw requests/responses + screenshots for PoC.
+
+---
+
+## 🔹 Proof / Evidence
+
+*1) Username locked (enumeration PoC)*  
+Screenshot: images/account-lock-username-found.png  
+Caption: Intruder row showing the username that produced the lock response on the Nth attempt.
+
+*2) Password found (brute-force PoC)*  
+Screenshot: images/account-lock-password-found.png  
+Caption: Intruder/Repeater row showing the successful password guess (302 / Set-Cookie) for the confirmed username.
