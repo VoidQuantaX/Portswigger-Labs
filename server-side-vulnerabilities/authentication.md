@@ -818,7 +818,7 @@ This breaks the server-side binding required for secure multi-factor auth.
 ## 🔹 Proof / Evidence
 
 1. *Generate victim OTP (request)* — shows the GET /login2?verify=carlos request used to generate an OTP for the victim.  
-   ![Generate victim OTP (GET verify=carlos)](../images/2fa-generate-verify-carlos.png)
+   ![Generate victim OTP (GET verify=carlos)](../images/2fa-generate-verify-username.png)
 
 2. *Successful OTP brute-force (Intruder hit)* — shows the Intruder row / Repeater response where the correct mfa-code returned a 302 or promoted session (proof of account takeover).  
    ![OTP brute-force success (Intruder hit)](../images/2fa-otp-bruteforce-success.png)
