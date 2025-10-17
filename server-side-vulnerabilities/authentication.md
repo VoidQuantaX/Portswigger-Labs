@@ -743,3 +743,125 @@ If the GET returns account content without OTP, the vulnerability is confirmed.
 5. Recommend pre-auth tokens + server-side 2FA checks.
 
 ---
+
+# 2FA verification logic flaw (Lab-7) 
+
+---
+
+## 🔹 One-line summary
+A client-controllable verify (or equivalent) parameter lets an attacker generate and brute-force OTPs for any user. If the server ties verification to that client value instead of server-side state, an attacker can gain access to victims’ accounts by submitting OTPs while authenticated as their own session.
+
+---
+
+## 🔹 What is this vulnerability?
+When the server accepts a client-supplied identifier (e.g. verify=<username>) for OTP generation/verification, an attacker can:
+1. Trigger OTP generation for a victim,  
+2. Submit OTP attempts while authenticated in their own session (with verify switched to the victim), and  
+3. Gain access if the correct OTP is guessed — because verification is not bound to server-side session state.
+
+This breaks the server-side binding required for secure multi-factor auth.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- Attackers can generate/verify OTPs for arbitrary users and brute-force them.  
+- 2FA can be bypassed without knowing passwords.  
+- Full account takeover, PII exposure, unauthorized transactions, and further escalation are possible.
+
+---
+
+## 🔹 High-value places to check
+- GET /login2?verify=<user> and other 2FA generation endpoints.  
+- POST /login2, /2fa/verify, /otp/verify (OTP submission handlers).  
+- Hidden form fields on 2FA page (verify, mfa_token, state).  
+- GET /my-account, /inbox, /messages — protected pages to validate access.
+
+(Grep keywords: verify=, mfa, otp, two-factor, mfa_token, Set-Cookie.)
+
+---
+
+## 🔹 Exact lab walkthrough/Methodology
+(Authorized testing only.)
+
+1. *Login as control user* (e.g. wiener:peter) with Burp Proxy ON; observe the 2FA flow to capture the structure of requests.
+
+2. *Log out* (clean session).
+
+3. *Generate victim code*  
+   - Send GET /login2?verify=carlos to Repeater (or use browser) — this triggers generation of an OTP for carlos.  
+   - Save the request/response.
+
+4. *Capture OTP submission template*  
+   - Log in as control user again and, at 2FA prompt, submit an invalid code to generate a POST /login2 request.  
+   - In Proxy → HTTP history locate that POST /login2 and *Send to Intruder*.
+
+5. *Prepare Intruder*  
+   - Intruder → Positions → Clear markers.  
+   - Edit the request to set verify=carlos (in body/query) and mark only the OTP field as payload, e.g.: mfa-code=§1§.  
+   - Attack type: *Sniper*. Threads = 1. Throttle 300–500 ms. Follow redirects = OFF.  
+   - Payloads: Numbers → generate 0000 → 9999 (pad to lab digit length).
+
+6. *Run attack & detect success*  
+   - Watch for success signal: 302 redirect to account, Set-Cookie promoting session, or a distinct response length/status.  
+   - Sort results by Status/Length to spot the hit.
+
+7. *Verify*  
+   - Open the successful response in the browser / use the Location redirect to load /my-account and confirm access to the victim’s account.
+
+8. *Collect PoC*  
+   - Save GET /login2?verify=carlos (request).  
+   - Save the successful POST /login2 (request + 302 response).  
+   - Save GET /my-account (shows victim data) and screenshot for evidence.
+
+---
+
+## 🔹 Proof / Evidence
+
+1. *Generate victim OTP (request)* — shows the GET /login2?verify=carlos request used to generate an OTP for the victim.  
+   ![Generate victim OTP (GET verify=carlos)](../images/2fa-generate-verify-carlos.png)
+
+2. *Successful OTP brute-force (Intruder hit)* — shows the Intruder row / Repeater response where the correct mfa-code returned a 302 or promoted session (proof of account takeover).  
+   ![OTP brute-force success (Intruder hit)](../images/2fa-otp-bruteforce-success.png)
+
+## 🔹 Repeater / Intruder PoC templates 
+
+*Generate victim code (GET)*
+
+GET /login2?verify=carlos HTTP/1.1 Host: <LAB_HOST> Cookie: session=<YOUR_SESSION> Connection: close
+
+*OTP submission (Intruder template)*
+
+POST /login2 HTTP/1.1 Host: <LAB_HOST> Content-Type: application/x-www-form-urlencoded Cookie: session=<YOUR_SESSION>
+
+verify=carlos&mfa-code=§1§&mfa_token=<CAPTURED_TOKEN>&...
+
+- Payload 1: Numbers 0000–9999 (pad to lab length).  
+- Attack type: *Sniper*, Threads = 1, Throttle 300–500 ms, Follow redirects = OFF.
+
+---
+
+## 🔹 Detection indicators (what defenders see)
+- Many GET /login2?verify=<different-users> from same source.  
+- High rate of POST /login2 OTP attempts tied to a client-supplied verify value.  
+- Successful POST /login2 followed by immediate access to /my-account without server-side session identity checks.
+
+---
+
+## 🔹 Quick remediation checklist
+- *Bind OTP generation & verification to server-side session* (store pending target server-side).  
+- Reject client-supplied identity (verify) as the authoritative target.  
+- Rate-limit OTP attempts and alert on anomalies.  
+- Short OTP TTL, monitor issuance, and lock / challenge after multiple failures.  
+- Sign/encrypt client state if any client token is needed — prefer server-only mapping.
+
+---
+
+## 🔹 Pentest checklist 
+1. Find GET /login2 or similar generation endpoint.  
+2. Trigger OTP generation for a target (verify=<victim>).  
+3. Capture the POST /login2 template by submitting an invalid code as control user.  
+4. Intruder: set verify=<victim> and brute-force mfa-code (Sniper). Threads = 1.  
+5. Detect success via 302/Set-Cookie/response-length.  
+6. Verify /my-account access and save PoC.
+
+---
