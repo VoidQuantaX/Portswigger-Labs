@@ -978,8 +978,3 @@ GET /my-account?id=carlos HTTP/1.1 Host: <LAB_HOST> Cookie: stay-logged-in=<BASE
 - Log suspicious token validation attempts.
 
 ---
-
-## 🔹 Pocket memory cue
-“Decode stay-logged-in → if username:md5, generate tokens with MD5(password) candidates → Intruder (Threads=1) → decode candidate → Repeater w/ session → confirm Update email.”
-
----
