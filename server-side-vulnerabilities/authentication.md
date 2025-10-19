@@ -870,3 +870,116 @@ verify=carlos&mfa-code=§1§&mfa_token=<CAPTURED_TOKEN>&...
 6. Verify /my-account access and save PoC.
 
 ---
+
+# Stay-logged-in token Lab-8 — Notes 
+
+---
+
+## 🔹 One-line summary
+Some apps build persistent "remember-me" tokens from predictable inputs (example: Base64(username + ":" + md5(password))). If a token can be generated for a victim, an attacker can impersonate them without knowing their plaintext password.
+
+---
+
+## 🔹 What is this issue?
+A persistent token (stay-logged-in / remember-me) derived from low-entropy or predictable inputs (username + hash of password) is brute-forceable or enumerable offline. If the server accepts such a token as authentication, an attacker can gain account access by forging the token.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- Offline brute-force of tokens is feasible if they are constructed from predictable pieces.  
+- Tokens may be accepted without additional checks, enabling immediate account takeover.  
+- High-impact accounts (email, payments, admin) are particularly dangerous targets.
+
+---
+
+## 🔹 High-value endpoints to check
+- POST /login (where persistent cookie may be set)  
+- Any endpoint that sets Set-Cookie: stay-logged-in / remember-me  
+- GET /my-account?id=<username>, /profile, /settings — endpoints that confirm authentication
+
+---
+
+## 🔹 How to detect it (fast reconnaissance)
+1. Log in as a test user and enable “stay logged in”.  
+2. Inspect Set-Cookie for the persistent token. URL-decode then Base64-decode the token. If it yields username:<32hex> consider md5(password) as the likely component.  
+3. Try presenting the cookie alone or with a fresh session to a protected endpoint to check whether it authenticates.
+
+---
+
+## 🔹 Lab walkthrough — compact 
+
+### Self-test (verify pipeline)
+1. Login as wiener:peter. Capture a GET /my-account?id=wiener from HTTP history.  
+2. Send that GET to Intruder. In *Positions* mark only the stay-logged-in cookie value as §...§. Clear other markers.  
+3. Payloads → *Simple list* → add single payload: peter.  
+4. Payload Processing (exact order):  
+   - *Hash* → MD5 (lower-case hex)  
+   - *Add prefix* → wiener:  
+   - *Encode* → Base64-encode  
+5. Settings → Grep: Update email (or another authenticated page marker). Threads = 1. Start attack.  
+6. Decode the resulting Base64 token (URL-decode %3d → = if necessary), then Base64-decode — expect wiener:<32hex>.
+
+### Full attack (target = carlos)
+7. Log out. In HTTP history find GET /my-account?id=wiener and Send to Intruder.  
+8. Positions: mark only the stay-logged-in cookie value §...§.  
+9. Payloads: load candidate password list (Simple list).  
+10. Payload Processing (exact order):  
+    - Hash → MD5  
+    - Add prefix → carlos:  
+    - Encode → Base64-encode  
+11. Settings: Threads = 1, Grep-Match Update email. Disable auto URL-encoding if possible (or URL-decode %3d → = afterwards). Start attack.  
+12. Inspect results: one row should produce a Grep match / 200 / or unique length among 302s. Copy that Base64 token and decode: expect carlos:<32hex>.
+
+### Confirming the hit
+13. If you have <32hex>, compute which plaintext password produced it (MD5 of candidate list or script).  
+14. Verify in Repeater with a fresh session:
+
+GET /my-account?id=carlos HTTP/1.1 Host: <LAB_HOST> Cookie: stay-logged-in=<BASE64_FROM_INTRUDER_ROW>; session=<FRESH_SESSION>
+
+15. If the response contains Update email (authenticated UI) → lab solved.
+
+*Notes:* lab instances vary — sometimes the persistent cookie alone authenticates; sometimes a fresh session is also required. Both are valid PoC flows.
+
+---
+
+## 🔹 Repeater-ready PoC template 
+
+GET /my-account?id=carlos HTTP/1.1 Host: <LAB_HOST> Cookie: stay-logged-in=<BASE64_TOKEN_FROM_INTRUDER>; session=<FRESH_SESSION_IF_NEEDED> User-Agent: Mozilla/5.0 Accept: text/html Connection: close
+
+---
+
+## 🔹 Proof / Evidence
+
+1. *Captured stay-logged-in cookie (found with session)* — shows the persistent token present in the browser after enabling “stay logged in” plus the session cookie used for verification.  
+   ![Stay-logged-in + session cookie captured](../images/stayloggedin-cookie-with-session.png)
+
+2. *Intruder found token for carlos* — shows the Intruder row where a generated Base64 token matched an authenticated response (Grep Update email / unique 200 among 302s).  
+   ![Stay-logged-in hit for carlos (Intruder result)](../images/stayloggedin-token-username-hit.png)
+
+---   
+
+## 🔹 Real-world attack scenarios 
+- Offline brute-force of persistent tokens derived from username+hash.  
+- Token theft via XSS / network compromise → account takeover.  
+- Token reuse across devices if server fails to bind token to device/session.
+
+---
+
+## 🔹 Detection indicators (what defenders see)
+- Many GET /my-account?id=... requests with different stay-logged-in cookie values.  
+- Server logs showing Base64 tokens that decode to username + md5-like strings.
+
+---
+
+## 🔹 Quick remediation checklist
+- Don’t derive tokens from password material. Use random, server-generated tokens stored server-side.  
+- Bind tokens to device metadata and expiry; support revocation.  
+- Set cookies with HttpOnly, Secure, SameSite. Rate-limit token validation endpoints.  
+- Log suspicious token validation attempts.
+
+---
+
+## 🔹 Pocket memory cue
+“Decode stay-logged-in → if username:md5, generate tokens with MD5(password) candidates → Intruder (Threads=1) → decode candidate → Repeater w/ session → confirm Update email.”
+
+---
