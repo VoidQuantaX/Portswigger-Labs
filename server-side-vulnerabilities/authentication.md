@@ -1126,3 +1126,144 @@ Connection: close
 - Decode → crack MD5 → login as victim → verify & document PoC.
 
 ---
+
+# Password reset Lab-10 — token validated on page load but not on submit 
+
+---
+
+## 🔹 One-line summary
+The reset flow validates a token when the reset page is loaded (GET) but does not re-validate that token against the target account on form submission (POST). Reusing a token for a different username on submit lets an attacker reset another user’s password.
+
+---
+
+## 🔹 What is this issue? (short)
+The application accepts a high-entropy reset token at page render but trusts a client-supplied username when performing the actual password update. If the server does not check that the token maps to the supplied username on POST, an attacker who obtains a token for their account can reuse it to reset any account by editing the POST parameters.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- Token reuse across accounts → full account takeover.
+- No XSS or network access to the victim required — attacker only needs to request a token for a controlled account.
+- If admin accounts are affected → severe system compromise.
+- Highly reliable and automatable for mass takeover.
+
+---
+
+## 🔹 High-value places / patterns to check
+- Reset URL: GET /reset?token=<TOKEN> and separate username or id parameters.
+- Reset form that includes token at GET only, but accepts username on POST.
+- Any flow that validates token on GET but does not bind token→user server-side for submission.
+
+---
+
+## 🔹 How to find & confirm quickly (fast recon)
+1. Request a reset token for your test account and capture the reset link.
+2. Open the reset link (GET) and inspect the form fields: token, username/id, password, confirm, maybe csrf.
+3. Capture the POST the form submits.
+4. Edit the POST: keep token=<LONG_TOKEN> exactly, change username=testuser → username=target, set new passwords, send.
+5. If you can log in as target with the new password → vulnerable.
+
+---
+
+## 🔹 Exact methodology / Lab walkthrough (copy-paste ready)
+*Request & capture token*
+1. Request password reset for attacker-controlled account (e.g., wiener).
+2. Open lab email / inbox and copy the reset URL shown:
+https://<LAB_HOST>/reset?token=<LONG_TOKEN>
+
+*Inspect reset page (GET)*
+3. Send the GET https://<LAB_HOST>/reset?token=<LONG_TOKEN> to Repeater.
+4. Inspect the HTML form — note exact field names (e.g., token, username/user, password, confirm, possible csrf). Save the captured GET/response.
+
+*Capture the POST template*
+5. Submit the form normally (can be with dummy password) or build the POST from the GET response to capture the exact POST body and headers (CSRF, cookies).
+
+*Reuse token but change target (exploit)*
+6. In Repeater edit the captured POST body exactly:
+Keep token=<LONG_TOKEN> unchanged.
+Change username=wiener → username=carlos.
+Set password=P@ssw0rd123! and confirm=P@ssw0rd123!.
+Include CSRF/session values exactly as in the captured request if required by the form.
+7. Send the edited POST.
+
+*Verify success*
+8. If the server returns a redirect (e.g., 302) or success page — verify by logging in as the victim (carlos) with P@ssw0rd123! in a fresh browser session.
+9. If login succeeds → lab solved.
+
+> Notes: If the server requires the token in the query string on POST, use the POST /reset?token=<LONG_TOKEN> form. Always preserve CSRF and cookie values exactly when replaying.
+
+---
+
+## 🔹 Proof / Evidence (screenshots — place in images/)
+1. *Reset token received for wiener* — screenshot showing the emailed/in-app reset link containing token=<LONG_TOKEN>.
+![Reset token in email/inbox](../images/reset-token-email-wiener.png)
+
+2. *Reset page (GET) showing form fields* — screenshot of the reset page with visible fields: token, username, password, confirm (the page you inspected in Repeater).
+![Reset page with token + fields](../images/reset-page-with-token-fields.png)
+
+3. *Edited POST in Repeater (token same, username changed to carlos)* — screenshot showing the modified POST sent from Repeater (token unchanged, username set to carlos, new password fields) and the 302/200 response plus successful login verification.
+![Repeater POST - token reused, username changed](../images/reset-post-reuse-token-change-username.png)
+
+---
+
+## 🔹 Repeater-ready POST templates (edit placeholders)
+
+*Common POST (token in body):*
+
+POST /reset HTTP/1.1
+Host: <LAB_HOST>
+Content-Type: application/x-www-form-urlencoded
+Cookie: session=<SESSION_IF_NEEDED>
+
+token=<LONG_TOKEN>&username=carlos&password=P@ssw0rd123!&confirm=P@ssw0rd123!
+
+*If token is expected in query string:*
+
+POST /reset?token=<LONG_TOKEN> HTTP/1.1
+Host: <LAB_HOST>
+Content-Type: application/x-www-form-urlencoded
+Cookie: session=<SESSION_IF_NEEDED>
+
+username=carlos&password=P@ssw0rd123!&confirm=P@ssw0rd123!
+
+---
+
+## 🔹 Common responses & interpretation
+- 302 redirect after POST: ambiguous — always verify by attempting login as the target.
+- 200 on GET: token valid for page render.
+- 401 / “invalid token”: server re-validates on POST (not vulnerable on this path).
+- If CSRF tokens are present, include them exactly from the GET response.
+
+---
+
+## 🔹 Real-world scenarios (concise)
+- Attacker requests token for own account, reuses token to reset multiple high-value accounts.
+- Automated mass compromise: script token-request + reuse to reset many accounts.
+- Combined with weak passwords or reuse → lateral movement to external systems.
+
+---
+
+## 🔹 Detection indicators (what defenders see)
+- Same token value used in POSTs for different username values.
+- Audit logs where token→user mapping is mismatched.
+- Spike of resets for one IP followed by logins to many accounts.
+
+---
+
+## 🔹 Quick remediation checklist
+1. Bind token → user server-side. On POST, ignore client-supplied username; derive target from token server-side.
+2. Validate token on POST and mark token single-use; invalidate immediately.
+3. Short TTL for tokens and rate-limit reset requests.
+4. Log token issuance/consumption and alert on cross-account reuse.
+5. Always require CSRF protection and server-side verification at submit.
+
+---
+
+## 🔹 Pentest checklist (copyable)
+- Request token for attacker account; capture reset URL.
+- GET the reset page; capture form fields (token, username, csrf).
+- Build and send edited POST with same token but username=target.
+- Verify by logging in as target.
+- Save PoC: raw GET, edited POST, successful login response + screenshot.
+
+---
