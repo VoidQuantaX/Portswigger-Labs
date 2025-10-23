@@ -1166,29 +1166,32 @@ The application accepts a high-entropy reset token at page render but trusts a c
 ---
 
 ## 🔹 Exact methodology / Lab walkthrough (copy-paste ready)
-*Request & capture token*
-1. Request password reset for attacker-controlled account (e.g., wiener).
-2. Open lab email / inbox and copy the reset URL shown:
-https://<LAB_HOST>/reset?token=<LONG_TOKEN>
+1. *Request & capture token*
 
-*Inspect reset page (GET)*
-3. Send the GET https://<LAB_HOST>/reset?token=<LONG_TOKEN> to Repeater.
-4. Inspect the HTML form — note exact field names (e.g., token, username/user, password, confirm, possible csrf). Save the captured GET/response.
+- Request password reset for attacker-controlled account (e.g., wiener).
+- Open lab email / inbox and copy the reset URL shown:
+  https://<LAB_HOST>/reset?token=<LONG_TOKEN>
 
-*Capture the POST template*
-5. Submit the form normally (can be with dummy password) or build the POST from the GET response to capture the exact POST body and headers (CSRF, cookies).
+2. *Inspect reset page (GET)*
 
-*Reuse token but change target (exploit)*
-6. In Repeater edit the captured POST body exactly:
-Keep token=<LONG_TOKEN> unchanged.
-Change username=wiener → username=carlos.
-Set password=P@ssw0rd123! and confirm=P@ssw0rd123!.
-Include CSRF/session values exactly as in the captured request if required by the form.
-7. Send the edited POST.
+- Send the GET https://<LAB_HOST>/reset?token=<LONG_TOKEN> to Repeater.
+- Inspect the HTML form — note exact field names (e.g., token, username/user, password, confirm, possible csrf). Save the captured GET/response.
 
-*Verify success*
-8. If the server returns a redirect (e.g., 302) or success page — verify by logging in as the victim (carlos) with P@ssw0rd123! in a fresh browser session.
-9. If login succeeds → lab solved.
+3. *Capture the POST template*
+
+- Submit the form normally (can be with dummy password) or build the POST from the GET response to capture the exact POST body and headers (CSRF, cookies).
+- Reuse token but change target (exploit)
+- In Repeater edit the captured POST body exactly:
+- Keep token=<LONG_TOKEN> unchanged.
+- Change username=wiener → username=carlos.
+- Set password=P@ssw0rd123! and confirm=P@ssw0rd123!.
+- Include CSRF/session values exactly as in the captured request if required by the form.
+- Send the edited POST.
+
+4. *Verify success*
+
+- If the server returns a redirect (e.g., 302) or success page — verify by logging in as the victim (carlos) with P@ssw0rd123! in a fresh browser session.
+- If login succeeds → lab solved.
 
 > Notes: If the server requires the token in the query string on POST, use the POST /reset?token=<LONG_TOKEN> form. Always preserve CSRF and cookie values exactly when replaying.
 
