@@ -1165,7 +1165,7 @@ The application accepts a high-entropy reset token at page render but trusts a c
 
 ---
 
-## 🔹 Exact methodology / Lab walkthrough (copy-paste ready)
+## 🔹 Exact methodology / Lab walkthrough 
 1. *Request & capture token*
 
 - Request password reset for attacker-controlled account (e.g., wiener).
@@ -1209,7 +1209,7 @@ The application accepts a high-entropy reset token at page render but trusts a c
 
 ---
 
-## 🔹 Repeater-ready POST templates (edit placeholders)
+## 🔹 Repeater-ready POST templates 
 
 *Common POST (token in body):*
 
