@@ -1271,7 +1271,7 @@ username=carlos&password=P@ssw0rd123!&confirm=P@ssw0rd123!
 
 ---
 
-# Password reset poisoning — Notes (PortSwigger-style)
+# Password reset poisoning Lab-11 — Notes 
 
 ---
 
@@ -1308,7 +1308,7 @@ When an app builds absolute reset URLs using untrusted forwarded headers, an att
 
 ---
 
-## 🔹 Exact step-by-step lab methodology (do not skip steps)
+## 🔹 Exact step-by-step lab methodology 
 > Work only in an authorized lab environment.
 ### 1) Preparation
 - Open Burp Suite (Proxy ON). Use a fresh browser/private window.
@@ -1393,7 +1393,7 @@ Below are the evidences captured during the exploitation process, attached under
 
 ---
 
-### 🔹 Repeater / PoC templates (copy/paste & edit)
+### 🔹 Repeater / PoC templates 
 
 *Baseline POST (captured from browser; send for wiener initially)*
 
@@ -1453,6 +1453,75 @@ token=<STOLEN_TOKEN>&password=NewP@ssw0rd!&confirm=NewP@ssw0rd!
 
 ---
 
+# Changing user passwords Lab-12 — Notes 
+
+---
+
+## 🔹 One-line summary
+Insecure password-change endpoints that accept a client-supplied username/userId or skip proper session checks allow an attacker to change another user’s password (account takeover) or bypass authentication controls.
+
+---
+
+## 🔹 What is this issue?
+Password-change endpoints should require a valid authenticated session and verify the current password belongs to the logged-in user (or use a server-bound reset token). When the server instead trusts a client-provided username/userId (hidden form field, JSON body, query), or fails to check session ownership, an attacker can submit requests that change someone else’s password.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- *Immediate account takeover* — attacker sets victim’s password and logs in.  
+- *Lateral movement* — use compromised accounts to access further resources.  
+- *Large-scale abuse* — if endpoint accepts arbitrary usernames, automation allows bulk takeover.  
+- *Enumeration & chaining* — change endpoint errors/timing can leak valid usernames and feed brute-force or reset attacks.  
+- *High impact* when admin accounts are affected (full system compromise).
+
+---
+
+## 🔹 High-value places to look
+- /change-password, /account/change-password, /user/settings/password  
+- API endpoints: POST /api/users/{id}/password, PATCH /api/accounts  
+- Profile update forms with hidden username/userId fields  
+- Single-page-app XHR/Fetch endpoints that send userId in JSON  
+- Reset flows that accept token on GET but don’t validate on POST  
+- Admin panels that accept username to reset passwords
+
+---
+
+## 🔹 Common faulty implementations
+- Server uses client-supplied username/userId to identify target account.  
+- No check that current_password belongs to the session user (session.user != target).  
+- Password-change accepted without an authenticated session.  
+- Distinct error messages or timing differences reveal valid users.  
+- Rate-limiting applied per-IP only; bypassable with X-Forwarded-For or IP rotation.  
+- Reset tokens not bound to user or not single-use.
+
+---
+
+## 🔹 How to test (hands-on checklist)
+1. *Crawl UI & capture baseline* — capture a legitimate password-change request (Proxy ON).  
+2. *Inspect request body* — look for username, userId, id or other target fields.  
+3. *Modify target* — in Repeater, change username=<your> → username=carlos while keeping your session cookie. Send.  
+   - If success → immediate takeover.  
+4. *Unauthenticated test* — remove Cookie header and resend the same request. If accepted → no auth required.  
+5. *Error/enum checks* — compare responses for non-existent vs existent usernames (status, length, message). Use Intruder Grep-Extract for automation.  
+6. *Timing checks* — long/slow responses may indicate DB lookup for valid username. Amplify/measure if needed.  
+7. *Password policy* — try short, empty, or invalid passwords to see server-side validation.  
+8. *Rate-limit & bypass* — test lockout, X-Forwarded-For, IP rotation, interleaving successful logins, threads=1 pitchfork/cluster bomb patterns.  
+9. *Token flows* — capture reset GET → capture POST → try reusing token with different username in POST.  
+10. *Record PoC* — raw request(s), response showing success, and a successful login as the target.
+
+---
+
+## 🔹 Lab / Repeater-ready template 
+
+*Form-encoded vulnerable POST*
+http
+POST /change-password HTTP/1.1
+Host: example.com
+Content-Type: application/x-www-form-urlencoded
+Cookie: session=YOUR_SESSION_COOKIE
+
+username=carlos&current_password=whatever&new_password=P@ssw0rd123!&confirm_password=P@ssw0rd123!
+
 ## 🔹 Pentest checklist (copyable)
 1. Capture legitimate reset email & URL for wiener.
 2. Send modified POST /forgot-password with X-Forwarded-Host: <EXPLOIT_HOST> and username=carlos to Repeater.
@@ -1461,3 +1530,83 @@ token=<STOLEN_TOKEN>&password=NewP@ssw0rd!&confirm=NewP@ssw0rd!
 5. Verify login as carlos. Save PoC.
 
 ---
+
+## API JSON Example
+
+POST /api/users/password HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+Cookie: session=YOUR_SESSION
+
+{"userId":"carlos","currentPassword":"x","newPassword":"P@ssw0rd123!"}
+
+---
+
+## 🔹 Unauthenticated test
+
+- Remove the Cookie header from either template and resend — does the endpoint accept changes without authentication?
+
+---
+
+## 🔹 Reset-token abuse
+
+- Capture GET /reset?token=ABC → send the corresponding POST with token=ABC but change username=carlos in the POST body → send and observe behavior.
+
+---
+
+## 🔹 What to look for (signals)
+
+- 200 / 302 success after changing another user’s password.  
+- Subsequent login success as the victim.  
+- Different response lengths or messages for valid vs invalid usernames.  
+- Requests accepted without Cookie or CSRF token.  
+- Reset POST`s where the token remains valid when used with a different `username.
+
+---
+
+## 🔹 Detection indicators (what defenders see)
+
+- change-password requests where session.user != target user.  
+- Spike in password-change `POST`s for many accounts from the same IP.  
+- Log entries showing missing or invalid session on change requests.  
+- Unusual lockouts or high rates of “incorrect current password” events.
+
+---
+
+## 🔹 Quick remediation checklist (what to recommend)
+
+- *Always* identify target user server-side using the authenticated session (do *not* trust client username/userId).  
+- Require and verify session.user == targetUser before any change.  
+- Require current_password and validate it belongs to the session user.  
+- If using token flows: bind token → user server-side, make tokens single-use and short TTL, and validate on *POST*.  
+- Return *generic* error messages for failures (don’t reveal “user not found” vs “incorrect password”).  
+- Enforce CSRF protection for authenticated forms.  
+- Apply per-account rate limits and monitoring (not just per-IP).  
+- Enforce strong server-side password validation (length, complexity, reuse prevention).  
+- Log and alert on suspicious mass change attempts.
+
+---
+
+## 🔹 Pentest reporting template (copyable)
+
+- *Vulnerable endpoint:* /change-password (POST)  
+- *Vulnerable parameter:* username (client-supplied) or missing session check  
+- *PoC request:* raw request that changed carlos password (include only safely redacted session values)  
+- *Evidence:* response showing change success; login POST showing victim accepted new password; screenshot(s)  
+- *Impact:* account takeover → data access / privilege escalation  
+- *Reproduction steps:* 3–5 bullet steps (capture → edit username → send → login as victim)  
+- *Recommendation:* enforce server-side ownership checks, bind tokens to accounts, CSRF, rate-limit per account
+
+---
+
+## 🔹 Real-world scenarios & chaining
+
+- *A. Direct takeover via hidden username* — change hidden field to admin → set new password → login.  
+- *B. Enumeration → targeted brute-force* — use response differences to craft username list → brute-force current password.  
+- *C. Password change + session fixation* — combine with session fixation to retain attacker access after password change.  
+- *D. Token reuse / race* — stolen reset token not bound to user used across accounts.  
+- *E. XSS/CSRF chaining* — XSS steals session or triggers change; CSRF without token allows silent changes.  
+- *F. SSO pitfalls* — local password change and IdP inconsistency cause account confusion or lockout.
+
+---
+
