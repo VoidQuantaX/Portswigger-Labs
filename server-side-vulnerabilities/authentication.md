@@ -1368,23 +1368,28 @@ Below are the evidences captured during the exploitation process, attached under
 
 1. *Screenshot 1 — Baseline forgot-password (wiener)*  
    ../images/password-reset-poisoning-forgot-wiener.png  
-   Description: Captured the baseline POST /forgot-password request for *wiener*, showing the legitimate email trigger and the normal reset flow.
+   Description: Captured the baseline POST /forgot-password request for *wiener*, showing the legitimate email trigger and the normal reset flow.  
+   ![Baseline forgot-password (wiener)](../images/password-reset-poisoning-forgot-wiener.png)
 
 2. *Screenshot 2 — Poisoned request in Repeater (X-Forwarded-Host added)*  
    ../images/password-reset-poisoning-repeater-poisoned.png  
-   Description: Shows the modified *Repeater* request with headers X-Forwarded-Host: <EXPLOIT_HOST> and X-Forwarded-Proto: https, changing the username to *carlos*.
+   Description: Shows the modified *Repeater* request with headers X-Forwarded-Host: <EXPLOIT_HOST> and X-Forwarded-Proto: https, changing the username to *carlos*.  
+   ![Poisoned Repeater request (X-Forwarded-Host)](../images/password-reset-poisoning-repeater-poisoned.png)
 
 3. *Screenshot 3 — Exploit server access log (stolen token)*  
    ../images/password-reset-poisoning-exploitserver-log.png  
-   Description: Access log entry from the exploit server showing the captured reset token (temp-forgot-password-token=<STOLEN_TOKEN>).
+   Description: Access log entry from the exploit server showing the captured reset token (temp-forgot-password-token=<STOLEN_TOKEN>).  
+   ![Exploit-server access log with stolen token](../images/password-reset-poisoning-exploitserver-log.png)
 
 4. *Screenshot 4 — Real reset URL with replaced token*  
    ../images/password-reset-poisoning-real-url-replaced.png  
-   Description: Demonstrates the *legitimate reset URL* where the stolen token from the exploit server replaced the original token for *carlos*.
+   Description: Demonstrates the *legitimate reset URL* where the stolen token from the exploit server replaced the original token for *carlos*.  
+   ![Real reset URL with replaced token](../images/password-reset-poisoning-real-url-replaced.png)
 
 5. *Screenshot 5 — Successful login as carlos after reset*  
    ../images/password-reset-poisoning-carlos-logged-in.png  
-   Description: Proof of exploitation success — logged in as *carlos* after resetting the password using the stolen token.
+   Description: Proof of exploitation success — logged in as *carlos* after resetting the password using the stolen token.  
+   ![Logged in as carlos after reset](../images/password-reset-poisoning-carlos-logged-in.png)
 
 ---
 
