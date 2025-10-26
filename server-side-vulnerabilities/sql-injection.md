@@ -1,23 +1,53 @@
-# SQL Injection — Lab 1: Retrieving Hidden Data
+# SQL Injection Lab-1 — Retrieving Hidden Data 
 
 ---
 
 ## 🔹 One-line summary
-Injected SQL via the category parameter to bypass released = 1 and display unreleased products (proof attached).
+In-band SQL injection (WHERE-clause manipulation): inject into a filter parameter to neutralize AND released = 1 (or force the WHERE to true) and reveal unreleased/hidden products.
 
 ---
 
-## 🔹 Overview
-SQL Injection (SQLi) lets attackers manipulate database queries by injecting crafted input.  
-In this lab the category filter is concatenated into SQL; by altering the parameter we force the WHERE clause to return unreleased products.
+## 🔹 What is this issue?
+SQL injection (SQLi) occurs when untrusted input is concatenated into SQL queries. By injecting SQL metacharacters or logic (e.g. ' OR 1=1 --) an attacker can change the query semantics and return rows the application intended to hide.
 
 ---
 
-## 🔹 Methodology
+## 🔹 Why this matters (real-world risk)
+- Exposes sensitive or unreleased data (products, user records).  
+- Can escalate to data modification, account takeover, or RCE depending on DB features and privileges.  
+- Often allows enumeration of database structure, union-based data extraction, or blind/time-based exfiltration.
 
-- Capture the category filter request (e.g. GET /filter?category=...) in Burp Proxy.  
-- Send to Repeater and modify the category value to comment out or bypass the released = 1 check:CorporateGifts'-- // or CorporateGifts' OR 1=1--
-- Forward the modified request and inspect the response for unreleased products.
+---
+
+## 🔹 High-value places to test
+- Filter / search endpoints: /filter?category=..., /search?q=...  
+- Item lookups: /product?id=..., /item?id=...  
+- Sorting / pagination params: order, limit, page  
+- Admin exports / downloads: /export?table=...  
+- JSON APIs: values in POST/PUT JSON bodies that end up in SQL strings
+
+---
+
+## 🔹 Quick reconnaissance / how to spot it
+1. Submit a single quote ' and look for DB errors or unusual responses.  
+2. Try boolean tests: OR 1=1 vs OR 1=2 and compare content/length.  
+3. Inspect JS and links for parameters that map to DB-driven pages.  
+4. Watch for subtle clues: extra rows, changed pagination, different content-length, timing differences.
+
+---
+
+## 🔹 Lab walkthrough — compact (exact steps)
+1. Open Burp Proxy and capture a normal category request (e.g., click *Techgifts*).  
+2. Right-click captured request → *Send to Repeater*.  
+3. Modify category parameter to neutralize the released filter, for example:
+
+GET /filter?category=Techgifts'+OR+1=1-- HTTP/2
+Host: <lab-host>
+...
+
+4. Send the modified request in Repeater and inspect the response — unreleased products should now be visible.
+5. Save raw request/response as PoC and take a screenshot.
+*Lab solved.*
 
 ---
 
@@ -31,16 +61,61 @@ In this lab the category filter is concatenated into SQL; by altering the parame
 
 ---
 
-## 🔹 Impact
-- Data disclosure: hidden/unreleased product data exposed.  
-- Potential escalation: with additional queries an attacker can read sensitive tables, extract credentials, or modify data.
+## 🔹 PoC / Repeater-ready example 
+
+GET /filter?category=Techgifts'+OR+1=1-- HTTP/1.1
+Host: <LAB_HOST>
+User-Agent: Mozilla/5.0
+Accept: /
+Connection: close
 
 ---
 
-## 🔹 Remediation (short)
-- Use *parameterized queries / prepared statements* (no string concatenation into SQL).  
-- Whitelist allowed category values (e.g., only allow known categories).  
-- Apply least privilege to DB user accounts and monitor for anomalous query patterns.
+*If the parameter is numeric, use:*  
+id=1' OR 1=1-- (or id=1 OR 1=1 depending on context).
+
+*URL-encode payloads when sending via browser* (e.g., '%20OR%201%3D1--).
+
+---
+
+## 🔹 Common payloads & quick cheats
+
+- *Comment out rest:* '+-- or '+OR+1=1--  
+- *Force true:* ' OR '1'='1'--  
+- *Numeric id injection:* 1' OR 1=1--  
+- *Time-based (MySQL):* ' OR SLEEP(5)--  
+- *UNION discovery:* try ORDER BY then UNION SELECT NULL,version(),NULL-- (only if visible output)
+
+*Always adapt comment style to the DB (--, #, /* ... */).*
+
+---
+
+## 🔹 Troubleshooting
+
+- *No visible change:* try URL-encoding, use POST/JSON variants, or test different params.  
+- *WAF interference:* attempt simple obfuscation (e.g., UN/**/ION) or minimal payloads.  
+- *No output:* use blind techniques (time-based or OOB) *with permission*.
+
+---
+
+## 🔹 Fixes / remediation 
+
+- Use *parameterized queries / prepared statements* (no string concatenation).  
+- Enforce strict *whitelist validation* for known values (e.g., allowed categories).  
+- Hide verbose DB errors from users; log them internally.  
+- Use *least-privilege DB accounts* and separate read-only roles where possible.  
+- Add monitoring / WAF as defense-in-depth (not a replacement).
+
+---
+
+## 🔹 Pentest checklist 
+
+- Identify inputs reaching DB (GET/POST/JSON/headers/cookies).  
+- Test ' for errors.  
+- Try boolean tests: OR 1=1-- / OR 1=2--.  
+- If data returned, attempt UNION/ORDER BY to enumerate columns.  
+- If hidden, try time-based or OOB techniques.  
+- Save PoC: raw request + response + screenshot.
 
 ---
 
