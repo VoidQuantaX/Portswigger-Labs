@@ -347,7 +347,7 @@ SQL injection (SQLi) occurs when untrusted input is concatenated into SQL. In th
 
 ---
 
-## 🔹 PoC / Repeater-ready example (copy/paste & edit)
+## 🔹 PoC / Repeater-ready example 
 
 http
 GET /filter?category=Gifts' UNION SELECT NULL,NULL,NULL-- HTTP/1.1
@@ -410,7 +410,7 @@ Host: <LAB_HOST>
 
 ---
 
-## 🔹 Pentest checklist (copyable)
+## 🔹 Pentest checklist 
 
 1. Capture request → baseline.  
 2. Test a single-quote ' → see if errors appear.  
@@ -419,5 +419,148 @@ Host: <LAB_HOST>
 5. Extract data via group_concat / concat (or equivalent).  
 6. Save raw PoC request + response and take screenshots.  
 7. Recommend parameterized queries and whitelisting in the report.
+
+---
+
+# SQL Injection Lab-4 — Finding Columns Compatible with String Data — Notes 
+
+---
+
+## 🔹 One-line summary
+Find the number of columns returned by a vulnerable query (UNION NULL counting) and determine which column(s) accept string data — once you know a string-compatible column you can inject textual payloads (version(), group_concat(), concat(...)) to extract schema and rows.
+
+---
+
+## 🔹 1. What is this topic? (short)
+Determine which columns returned by a vulnerable query can hold string data. Knowing the column count *and* which column(s) accept strings is the stepping-stone from "I can inject" → "I can exfiltrate data" via UNION SELECT attacks.
+
+---
+
+## 🔹 2. Why this matters (real-world risk)
+- String-compatible columns let you return arbitrary textual payloads (function outputs, concatenated columns, credentials).  
+- Once one column reflects attacker-controlled text, you can extract DB metadata, table/column names, and rows.  
+- Fast pivot to credential dumps, business-data leaks, and further exploitation (e.g., internal hostnames → SSRF).
+
+---
+
+## 🔹 3. High-value targets / parameters to test
+- Category / filter / search parameters (e.g. /filter?category=..., /search?q=...)  
+- Item identifiers (/item?id=..., /product?id=...)  
+- Sort / order / pagination params (order, page, limit, offset)  
+- JSON API fields (POST bodies) that end up in SELECT outputs
+
+---
+
+## 🔹 4. Quick concept checklist
+- *Count columns:* UNION SELECT NULL,... until the response no longer errors.  
+- *Test string-compatibility:* replace one NULL with a short unique token (e.g. XYZ123) per column.  
+- *Conversion error = not string-compatible.* Normal response + token visible = column usable.  
+- If blocked, try casting, CHAR()/chr() building, or obfuscation.
+
+---
+
+## 🔹 5. Lab walkthrough — exact steps 
+
+1. *Capture baseline request*  
+   - Proxy *ON* → click the category/filter in the app. Right-click the captured request → *Send to Repeater*.
+
+2. *Determine column count (N)*  
+   - In Repeater, append payloads (increase NULL count) until the DB error disappears. Example sequence:
+     
+     ' UNION SELECT NULL-- 
+     ' UNION SELECT NULL,NULL-- 
+     ' UNION SELECT NULL,NULL,NULL-- 
+     
+   - The first NULL count that returns a normal page = *N* columns.
+
+3. *Get the lab token*  
+   - Note the string the lab asks you to make appear (or pick a short unique token for testing), e.g. XYZ123.
+
+4. *Test each column for string-compatibility*  
+   - Replace one NULL at a time with the token. If N = 3 and token = XYZ123, try:
+     
+     ' UNION SELECT 'XYZ123',NULL,NULL--      (col1)
+     ' UNION SELECT NULL,'XYZ123',NULL--      (col2)
+     ' UNION SELECT NULL,NULL,'XYZ123'--      (col3)
+     
+   - Send each request and inspect the *raw HTTP response* (page source). Look for XYZ123.
+
+5. *Handle conversion errors*  
+   - If a request produces a DB conversion error (500 or explicit DB error), that column is *not* string-compatible. Skip it.
+
+6. *When the token appears*  
+   - If the token is visible and the response is normal → column is string-compatible → save the request as PoC. Lab solved.
+
+7. *Next steps (after discovery)*  
+   - Use the discovered column to inject version(), group_concat(...) or table/column enumeration payloads and extract data.
+
+---
+
+## 🧾 Proof / Evidence
+
+1. *Screenshot 1 — Column count (NULLs)*  
+  ![ UNION SELECT NULL](../images/sqli-columns-null-count.png)
+   Description: Repeater request showing the UNION SELECT NULL,... sequence used to determine the correct column count *N* (response shows no DB error).
+
+2. *Screenshot 2 — Token matched in column*  
+  ![Compatible Data Type](../images/sqli-columns-token-match.png)  
+   Description: Repeater request/response showing the test UNION SELECT where the token (XYZ123) appears in the rendered response (proof that the column accepts string data).
+
+---
+
+## 🔹 6. Exact PoC template 
+Replace <HOST>, Techgifts, XYZ123, and adjust NULL count to N:
+
+http
+GET /filter?category=Techgifts' UNION SELECT NULL,'XYZ123',NULL-- HTTP/1.1
+Host: <HOST>
+User-Agent: Mozilla/5.0
+Accept: /
+Connection: close
+
+## 🔹 7. Troubleshooting — common issues & fixes
+
+- *No visible token but length changed:* view raw HTML source; token may be in attributes, script blocks, or comments.
+- *Conversion error (varchar ↔ int):* that column is numeric-only — try CAST(... AS CHAR) or skip that column.
+- *WAF / filters:* obfuscate UNION (UN/**/ION) or build the token via CHAR() / concat(char(...)).
+- *Token escaped/encoded:* check for HTML entities, hex, or URL-encoding — decode before matching.
+- *UNION blocked:* use ORDER BY to count columns (classic technique) or fall back to blind/OOB extraction.
+
+---
+
+## 🔹 8. Real-world attack scenarios (concise)
+
+- Use discovered string column to UNION SELECT version(), database(), user() to fingerprint DB.
+- UNION SELECT group_concat(concat(username,':',password) SEPARATOR 0x0a) ... FROM users to dump credentials (watch length limits).
+- If results truncate, paginate with LIMIT/OFFSET or extract with substring() in chunks.
+
+---
+
+## 🔹 9. Reporting checklist (what to include)
+
+- Vulnerable endpoint & parameter.  
+- Column count *N* and which column(s) accept strings.  
+- Exact PoC request showing token in response.  
+- Screenshot / raw response snippet containing token.  
+- Impact summary and remediation suggestions.
+
+---
+
+## 🔹 10. Quick remediation checklist
+
+- Use *parameterized queries / prepared statements*.  
+- Whitelist expected values (e.g., allowed categories).  
+- Remove verbose DB errors from public responses.  
+- Use least-privilege DB accounts; monitor unusual query patterns.  
+- Rate-limit & alert repeated UNION / ORDER BY probes.
+
+---
+
+## 🔹 Out-of-the-box / advanced strategies (short)
+
+- Build strings via CHAR() / chr() if literal strings fail.  
+- Obfuscate UNION or use ORDER BY counting as a fallback.  
+- Chunk large fields with substring() + LIMIT/OFFSET.  
+- Use information_schema to enumerate tables/columns quickly.
 
 ---
