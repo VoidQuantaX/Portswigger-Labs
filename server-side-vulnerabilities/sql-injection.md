@@ -1034,7 +1034,7 @@ MySQL  →  ?category=Gifts' UNION SELECT @@version,NULL# Postgres → ?category
 
 *Screenshot 1 — Confirmed UNION Injection with DB Version*
 
-![Apply single quoted comma ,then hashtag,then number of coulmns ,then reflected column ,then db version](📸../images/sqli-union-db-version.png)
+![Final updated query](../images/sqli-union-db-version.png)
 
 *Description:*  
 Repeater request sequence showing:  
