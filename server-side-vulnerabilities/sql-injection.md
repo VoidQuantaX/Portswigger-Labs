@@ -1340,6 +1340,13 @@ Description: Shows username and password columns returned from information_schem
 
 ---
 
+*Screenshot-7 (Credentials Enumeration)*
+![Credentials of Admin](../images/sqli-credentials-admin.png)
+Description: Shows password of administartor being fetched.
+
+
+---
+
 ## 🔹 PoC / Repeater-ready example
 
 Correct column count (example: 2 columns)
