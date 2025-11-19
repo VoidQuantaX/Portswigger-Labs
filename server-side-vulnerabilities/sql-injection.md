@@ -1518,22 +1518,22 @@ FROM users WHERE username='administrator')='§a§
 
 ## 🧾 Proof / Evidence  (Screenshots)
 
-![](1️⃣../images/boolean-test.png)  
+![boolean based test](1️⃣../images/boolean-test.png)  
 *Description:* TRUE/FALSE behavior showing SQL injection confirmed.
 
-![](2️⃣../images/users-table-check.png)  
+![users table check](2️⃣../images/users-table-check.png)  
 *Description:* Used payload to confirm the users table exists.
 
-![](3️⃣../images/admin-exists.png) 
+![administrator user check](3️⃣../images/admin-exists.png) 
 *Description:* Verified the administrator user is present.
 
-![](4️⃣../images/password-length.png)  
+![password length check](4️⃣../images/password-length.png)  
 *Description:* Enumerated password length using boolean responses.
 
-![](5️⃣../images/char-by-char.png)
+![char by char password grep](5️⃣../images/char-by-char.png)
 *Description:* Identified each password character using Intruder.
 
-![](6️⃣../images/final-password.png)  
+![credentials of administrator](6️⃣../images/final-password.png)  
 *Description:* Full admin password successfully extracted.
 
 ---
