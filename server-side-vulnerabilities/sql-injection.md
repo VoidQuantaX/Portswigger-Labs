@@ -1922,15 +1922,15 @@ The page does not display query results, but *database error messages leak inter
 ## 🔹 Evidence
 1. *Screenshot — CAST no-error test*
 ### 📸 Screenshot 1 — CAST() valid boolean (no error)
-![cast valid boolean](../images/cast_no_error.png)
+![cast valid boolean](../images/1-cast-no-error.png)
 
 2. *Screenshot — erased TrackingId for username extraction*
 ### 📸 Screenshot 2 — Erased TrackingId (query no longer auto-skipped)
-![erased query to stop auto-delete comment](../images/2_erased_trackingid.png) 
+![erased query to stop auto-delete comment](../images/2-erased-trackingid.png) 
 
 3. *Screenshot — password leak via CAST()*
 ### 📸 Screenshot 3 — Admin password leak via CAST()  
-![Admin password](../images/3_password_leaked.png)
+![Admin password](../images/3-password-leaked.png)
 
 ---
 
