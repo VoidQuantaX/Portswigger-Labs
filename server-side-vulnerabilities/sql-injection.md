@@ -2083,16 +2083,16 @@ EXtract password char by char to fetch admin password.Go to my account and enter
 ## 🧾 Evidence (Screenshots)
 
 1️⃣ **Screenshot — TRUE timing delay payload**  
-![Timing delay check with boolean condition](../images/true-delay-test.png)
+![Timing delay check with boolean condition](../images/true-delay-test-timesqli.png)
 
 2️⃣ **Screenshot — administrator user existence confirmed**  
-![Admin exists](../images/admin-exists.png)
+![Admin exists](../images/admin-exists-timesqli.png)
 
 3️⃣ **Screenshot — password length extraction**  
-![password length](../images/password-length.png)
+![password length](../images/password-length-timesqli.png)
 
 4️⃣ **Screenshot — Intruder extracting characters one-by-one**  
-![char by char password](../images/intruder-bruteforce.png)
+![char by char password](../images/intruder-bruteforce-timesqli.png)
 
 ---
 
