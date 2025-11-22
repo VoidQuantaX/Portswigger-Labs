@@ -2094,9 +2094,8 @@ EXtract password char by char to fetch admin password.Go to my account and enter
 4️⃣ **Screenshot — Intruder extracting characters one-by-one**  
 ![char by char password](../images/intruder-bruteforce-timesqli.png)
 
-5 **Screenshot - char by char time delay password**
-![delay check in password](../images/char-by-char-time-delay.png)
-
+5️⃣ **Screenshot — Time-delay during brute-force extraction** 
+![password extraction on time delay](../images/char-by-char-time-delay.png)
 
 ---
 
