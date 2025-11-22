@@ -2083,16 +2083,16 @@ EXtract password char by char to fetch admin password.Go to my account and enter
 ## 🧾 Evidence (Screenshots)
 
 1️⃣ **Screenshot — TRUE timing delay payload**  
-![Timing delay check with boolean condition](../images/true_delay_test.png)
+![Timing delay check with boolean condition](../images/true-delay-test.png)
 
 2️⃣ **Screenshot — administrator user existence confirmed**  
-![Admin exists](../images/admin_exists.png)
+![Admin exists](../images/admin-exists.png)
 
 3️⃣ **Screenshot — password length extraction**  
-![password length](../images/password_length.png)
+![password length](../images/password-length.png)
 
 4️⃣ **Screenshot — Intruder extracting characters one-by-one**  
-![char by char password](../images/intruder_bruteforce.png)
+![char by char password](../images/intruder-bruteforce.png)
 
 ---
 
