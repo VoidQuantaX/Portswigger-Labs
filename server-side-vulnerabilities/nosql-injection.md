@@ -412,7 +412,7 @@ Lab solved.
 # 📸 **EVIDENCE — Final Payload Screenshot**
 
 ### **Screenshot — Operator Injection Admin Login (Final Payload)**  
-![Admin credentials by operator manipulation](../images/5_operator_injection_admin_login.png)
+![Admin credentials by operator manipulation](../images/operator-injection-admin-login.png)
 
 Shows successful login after applying:
 
