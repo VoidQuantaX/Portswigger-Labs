@@ -446,7 +446,7 @@ MongoDB allows execution of JavaScript such as:
 
 If user input is placed inside:
 
-```
+```json
 "$where": "this.username == '" + user + "'"
 ```
 
@@ -630,7 +630,7 @@ Lab solved.
 ## 🔹 SCREENSHOT PLACEHOLDER
 
 📸 SS #1 — Intruder brute-forcing admin password  
-![](../images/admin-password-bruteforce-nosql.png)
+![admin password no sql bruteforce](../images/admin-password-bruteforce-nosql.png)
 
 ---
 
