@@ -677,3 +677,350 @@ administrator' && this.password[3]=='r' || 'a'=='a
 7. Don’t expose sensitive fields in lookup routes.  
 
 ---
+
+# 🟩 NoSQL Injection lab-4 – Operator Injection + Field Extraction
+
+Final Notes for Fast Real-World Solving (No Time Waste Version)
+
+
+---
+
+## **1. 🔍 Overview**
+
+This pattern of NoSQL injection occurs when:
+
+The backend is MongoDB
+
+The input is JSON
+
+Operators like $ne, $where, $regex, $gt, etc. are accepted
+
+Server evaluates MongoDB JavaScript ($where)
+
+
+This allows:
+
+Bypassing login
+
+Running conditions (0 false, 1 true)
+
+Enumerating field names in the database
+
+Extracting sensitive values character by character
+
+
+
+---
+
+## **2. 🧠 What is this Technique?**
+
+You inject MongoDB operators into JSON:
+
+Example:
+
+"password": {"$ne":"anything"}
+
+If the app accepts this → it is vulnerable.
+
+Then you escalate to JavaScript execution:
+
+"$where":"1"
+
+If the response changes → $where code is being executed.
+
+This means you can:
+
+Read object keys (Object.keys(this))
+
+Test substrings with regex
+
+Enumerate characters
+
+
+
+---
+
+## **3. 🌍 Real-World Scenario**
+
+This vulnerability appears when:
+
+Login endpoints directly pass JSON to MongoDB
+
+Node.js + Express + Mongoose apps
+
+Password reset systems store token fields on user objects
+
+No server-side validation of JSON structure
+
+
+Attackers can:
+
+✔ List all field names in user object
+✔ Find secret token field (resetToken / resetKey / passwordResetToken)
+✔ Extract token value via regex
+✔ Trigger password reset with stolen token
+✔ Take over the account
+
+
+---
+
+## **4. 🎯 High-Value Endpoints**
+
+Always target:
+
+Login (POST /login)
+
+Usually vulnerable
+
+Allows $ne, $gt, $regex, $where
+
+
+Forgot Password (GET /forgot-password)
+
+Usually takes token param
+
+Validates token from DB
+
+
+
+---
+
+## **5. 🚀 Fast Lab Walkthrough Template**
+
+Use this checklist for ALL similar labs.
+
+
+---
+
+### STEP 1 — Confirm NoSQL Injection
+
+Send:
+
+```json
+"password":{"$ne":"x"}
+```
+
+If response changes → vulnerable.
+
+
+---
+
+### STEP 2 — Confirm JS Injection
+
+Send:
+
+```json
+"$where":"0"
+```
+
+→ Should fail (false condition)
+
+Send:
+
+```json
+"$where":"1"
+```
+
+→ Should succeed or change behavior (true condition)
+
+Now you unlocked JavaScript execution inside query.
+
+
+---
+
+### STEP 3 — Extract Field Names
+
+Use this payload:
+
+```json
+"$where":"Object.keys(this)[X].match('^.{§§}§§.*')"
+```
+
+Where:
+
+X = which field index to check
+
+First payload = character index (0…20)
+
+Second payload = character guess (a…z, A…Z, 0…9)
+
+
+Correct guess → response changes (Account locked or success)
+
+Example result:
+
+u
+s
+e
+r
+n
+a
+m
+e
+
+Field name = username
+
+You repeat indexing:
+
+Object.keys(this)[0]
+Object.keys(this)[1]
+Object.keys(this)[2]
+...
+
+Until you find the password reset token field
+Example:
+
+passwordResetToken
+resetToken
+passwordResetKey
+reset_token
+
+This is the target.
+
+
+---
+
+### STEP 4 — Extract Token Value
+
+Once field name is found, use:
+
+```json
+"$where":"this.FIELDNAME.match('^.{§§}§§.*')"
+```
+
+This extracts the token value one character at a time.
+
+Use same:
+
+Payload 1 → character index
+
+Payload 2 → character guess
+
+
+Combine correct characters → token value.
+
+
+---
+
+### STEP 5 — Use the Token to Reset Password
+
+Go to:
+
+GET /forgot-password?FIELDNAME=TOKENVALUE
+
+If It loads a reset page → success.
+
+Set new password for carlos.
+
+
+---
+
+### STEP 6 — Login as carlos
+
+Use new password → lab solved.
+
+
+---
+
+##3 6. 🟦 Most Important Payloads to Memorize
+
+### 1. Operator test
+
+```json
+"password":{"$ne":"x"}
+```
+
+### 2. JS test
+
+```json
+"$where":"0"
+"$where":"1"
+```
+
+### 3. Field name extraction
+
+```json
+"$where":"Object.keys(this)[X].match('^.{Y}Z.*')"
+```
+
+Where:
+
+X = field index
+
+Y = character index
+
+Z = guessed character
+
+
+### 4. Value extraction
+
+```json
+"$where":"this.FIELDNAME.match('^.{Y}Z.*')"
+```
+
+---
+
+## 7. 🟩 Quick Recognizable Patterns to Save Time
+
+Instead of brute forcing blindly:
+
+✔ First fields are usually predictable:
+
+["_id", "username", "email", …]
+
+✔ Tokens always appear near end:
+
+Object.keys(this)[3]
+Object.keys(this)[4]
+Object.keys(this)[5]
+
+✔ Token values are long:
+
+20–40 characters
+
+alphanumeric
+
+mostly hex, base64-ish
+
+
+✔ Once you find token → attack is almost done.
+
+
+---
+
+## 8. 🧩 Real-World Fast Strategy (No Wasted Time)
+
+1. Test $ne → confirm NoSQL injection
+
+
+2. Test $where → confirm JS execution
+
+
+3. Extract field names for indexes 3 → 10 (skip username, email, etc.)
+
+
+4. Stop once you find reset token key
+
+
+5. Extract token value
+
+
+6. Use token to reset password
+
+
+7. Login and finish
+
+
+
+This avoids brute forcing useless fields.
+
+
+---
+
+## ⭐ FINAL NOTE
+
+You do not need to brute force every index.
+Start from index 2 or 3, skip obvious fields, move fast to token field.
+
+
+---
