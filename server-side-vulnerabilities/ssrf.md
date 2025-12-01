@@ -1,61 +1,217 @@
-# SSRF — Server-Side Request Forgery
+# 📘 SSRF Lab-1 (Server-Side Request Forgery) — Full Notes
+
+## 🟪 One‑Line Summary
+> **SSRF lets attackers make the server send requests to internal URLs, often bypassing authentication and gaining admin access.**
 
 ---
 
-## 🔹 Overview
-Server-Side Request Forgery (SSRF) occurs when an application fetches remote URLs supplied by an attacker.  
-This allows attackers to make the server reach internal-only systems (localhost, internal IPs) or other services, potentially exposing sensitive data or triggering privileged actions.
+## 🟦 What is SSRF?
+SSRF (Server-Side Request Forgery) is a vulnerability where an attacker tricks the server into sending HTTP requests on its behalf.
+
+- Attacker CANNOT reach internal systems directly.
+- But server CAN.
+- So attacker forces the server to request hidden/internal URLs.
+
+Example vulnerable parameter:
+```
+stockApi=http://api.company.com/check?product=1
+```
+
+If changing the URL changes what the server loads → SSRF exists.
 
 ---
 
-## 🔹 Why this is dangerous
-- Attackers can reach internal admin pages (localhost / 127.0.0.1) that are normally inaccessible from the outside.  
-- The server’s trust in its own network can be abused to read data or perform actions (delete users, access metadata services, etc.).
+## 🟥 Why SSRF Matters (Why It’s Dangerous)
+With SSRF, attackers can:
+
+- Access **internal admin panels**
+- Access **internal-only microservices**
+- Read **sensitive files / metadata**
+- Perform **privileged actions** as the server
+- Bypass authentication using `localhost`
+- Potentially escalate to **RCE**
+
+Some SSRF → complete cloud account takeover.
 
 ---
 
-## 🔹 Lab Description
-The application exposes a stockApi parameter which the server fetches. By changing stockApi to http://localhost/admin, the server will request the admin page and return its HTML. From that response we can find a delete link (/delete?username=carlos) and then use SSRF again to trigger it.
+## 🟧 Real‑World Scenarios (Where SSRF Happens)
+### 🏦 Banks / FinTech
+Internal services:
+- transaction approval
+- admin dashboards
+- audit logs
+
+### 🛒 E‑Commerce (just like the lab)
+- stock APIs
+- pricing APIs
+- /admin dashboards
+- /internal-ui
+
+### 🏥 Healthcare
+- patient records
+- doctor API dashboards
+- lab result systems
+
+### 🏢 Enterprise SaaS
+- employee admin systems
+- billing panels
+- internal analytics
+- feature toggles
+
+One SSRF → unrestricted internal access.
 
 ---
 
-## 🔹 Methodology / Steps
+## 🟥 Common SSRF Payloads
+```
+http://localhost/
+http://127.0.0.1/
+http://169.254.169.254/     # Cloud metadata
+file:///etc/passwd
+http://internal-service/admin
+```
 
-1. *Identify SSRF input*  
-   - Intercept the request that contains stockApi (e.g., POST /product/stock).
+---
 
-2. *Trigger internal request*  
-   - Modify stockApi to http://localhost/admin and send the request so the server fetches its own admin page.
+## 🔥 High‑Value Endpoints (Priority Targets in Real World)
+### 🔥 Priority 1
+```
+/admin
+/internal
+/config
+/debug
+/system
+/manage
+/api/admin/
+```
 
-   ![SSRF: server fetched localhost admin page](../images/ssrf-lab1-localhost-admin.png)  
+### 🔥 Priority 2 — Internal Ports
+```
+8000–9000
+5000–5001
+3000
+15672
+8080/8443
+```
+
+### 🔥 Priority 3 — Cloud Metadata
+```
+169.254.169.254          # AWS
+169.254.169.254/computeMetadata     # GCP
+169.254.169.254/metadata/identity   # Azure
+```
+
+---
+
+## 🟩 How SSRF Works (Simple Explanation)
+A feature accepts a URL from the user → backend fetches it → attacker points it to localhost/internal systems.
+
+Example:
+```
+stockApi=http://localhost/admin
+```
+
+Why it works:
+- many apps trust localhost
+- internal admin panels often skip auth if request is internal
+- backend → makes request BEFORE frontend auth checks
+
+---
+
+## 🟦 SSRF Loopback Attack (Against Server Itself)
+Payload:
+```
+http://localhost/admin
+```
+
+Benefits:
+- bypass login
+- retrieve admin area
+- perform admin actions via SSRF request
+
+---
+
+# 🟨 LAB WALKTHROUGH (PortSwigger Basic SSRF)
+
+## 🎯 Goal
+Use SSRF via stock checker → access admin panel → delete user **carlos**.
+
+## ✔ Vulnerable Parameter
+```
+stockApi=
+```
+
+## 🛠 Steps
+1. Open any product → **Check Stock**
+2. Intercept request → **Send to Repeater**
+3. Replace parameter:
+   ```
+   stockApi=http://localhost/admin
+   ```
+4. Send → Admin panel HTML appears (SSRF confirmed)
+5. Locate delete link:
+   ```
+   /admin/delete?username=carlos
+   ```
+6. Trigger delete:
+   ```
+   stockApi=http://localhost/admin/delete?username=carlos
+   ```
+7. Send → Carlos deleted → **Lab solved**
+
+---
+
+## 🟫 Why This Lab Is Vulnerable
+- Server accepts user-supplied URL.
+- Server automatically performs internal requests.
+- Auth bypass happens because localhost is trusted.
+- Backend fetch happens BEFORE auth enforcement.
+
+---
+
+# 🖼 Evidence (Screenshot Placeholder)
+
+### Screenshot-1
+![SSRF: server fetched localhost admin page](../images/ssrf-lab1-localhost-admin.png)  
    (Screenshot: modified stockApi → server fetched admin HTML showing admin links.)
 
-3. *Find action URL*  
-   - Inspect the returned HTML (Raw / Elements) and locate the delete link: /delete?username=carlos.
-
-4. *Exploit via SSRF*  
-   - Set stockApi to the discovered delete URL (e.g., http://localhost/delete?username=carlos) and send the request again.  
-   - Server performs the delete action as it trusts local requests.
-
-   ![SSRF: triggered internal delete via stockApi](../images/ssrf-lab1-trigger-delete.png)  
-   (Screenshot: second SSRF showing delete request/response and confirmation that carlos was removed.)
-
-5. *Verify*  
-   - Confirm carlos no longer exists (site shows deletion or lab solved).
+### Screenshot-2
+![SSRF: triggered internal delete via stockApi](../images/ssrf-lab1-trigger-delete.png)  
+   (Screenshot: second SSRF showing delete request/response and confirmation that carlos was removed.)   
 
 ---
 
-## 🔹 Security Impact
-- Remote attackers can cause the server to access local-only services, potentially leading to data exfiltration, internal port scanning, or destructive actions (delete/modify resources).
-- SSRF can be combined with other weaknesses for severe impact (e.g., metadata service access in cloud environments).
+# 🟩 Remediation (How to Prevent SSRF)
+### ✔ Allowlist URLs (strongest)
+Only allow pre-approved domains:
+```
+api.company.com
+assets.company.com
+```
+
+### ✔ Block internal IPs
+```
+127.0.0.1
+10.0.0.0/8
+192.168.0.0/16
+169.254.169.254
+```
+
+### ✔ Network-level egress filtering
+- block metadata
+- block internal-only ports
+
+### ✔ Sanitize & validate URL inputs
+- restrict protocols (no file://, gopher://, ftp://)
+- block redirect-based SSRF
+- resolve IP before allowlist check
 
 ---
 
-## 🔹 Remediation
-- Implement an allowlist of allowed outbound hosts (only trusted domains).  
-- Block requests to internal/private IP ranges (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16).  
-- Use an outbound proxy that validates/filters requested URLs.  
-- Avoid directly requesting user-supplied URLs; validate and normalize inputs and disallow protocols like file:, gopher:, etc.
+# ⭐ Real‑World Flowchart (Mental Model)
+
+> **If the app fetches a URL → you control the server’s browser → you can access everything the server can.**
 
 ---
 
