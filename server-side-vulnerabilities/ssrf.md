@@ -416,8 +416,13 @@ Send → user **carlos deleted** → **Lab solved**.
 
 ### 🖼 Evidence Screenshot #2 (Encoded Delete Payload)
 
+### Screenshot-1
+![SSRF — discovered delete link in returned HTML](../images/ssrf-lab2-found-delete-link.png)  
+(Screenshot 1: HTML/Elements view showing the /delete?username=carlos link.)
+
+### Screenshot-2
 ![SSRF — triggered delete via stockApi, verified carlos removed](../images/ssrf-lab2-solved.png)  
-(Screenshot 1: final SSRF request/response showing the delete action executed and confirmation.)
+(Screenshot 2: final SSRF request/response showing the delete action executed and confirmation.)
 
 ---
 
