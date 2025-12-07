@@ -791,7 +791,7 @@ stockApi=/product/nextProduct?path=http://192.168.0.12:8080/admin/delete%3Fusern
 ## 🔹 Evidence (Screenshots)
 - **SS#1 — Open Redirect discovered**  
   
-  ![open redirect path](../images/open-redirect-path.png)
+  ![open redirect path](../images/ssrf-open-redirect-path.png)
   
 - **SS#2 — Encoded SSRF -> Admin delete**  
   
