@@ -832,3 +832,134 @@ stockApi=/product/nextProduct?path=http://192.168.0.12:8080/admin/delete%3Fusern
 ```
 If stockApi follows redirects → point it to a redirect that lands on the internal admin.
 ```
+
+# 🔥 Blind SSRF Lab-5 – OAST (OUT OF BAND TECHNIQUES)
+
+---
+
+## 1. 📝 One-Line Summary
+Blind SSRF happens when the backend fetches a URL you control but does **not** return the response to you, requiring out-of-band (OAST) techniques such as Burp Collaborator to detect it.
+
+---
+
+## 2. ❓ What Is This Vulnerability?
+Blind SSRF occurs when:
+
+1. You supply a URL (header/parameter).
+2. Backend **makes a request** to that URL.
+3. But you **don’t see the response**.
+4. Only **DNS/HTTP callbacks** confirm it.
+
+The Referer header is used by the analytics system → making it an SSRF sink.
+
+---
+
+## 3. 🎯 Why This Matters
+Even without seeing responses, blind SSRF can still allow:
+
+- Internal port scanning  
+- Cloud metadata theft  
+- Triggering vulnerabilities on internal services  
+- Backend HTTP client exploitation  
+- Full RCE through crafted responses  
+
+Impact = **Critical**
+
+---
+
+## 4. 🔍 Real-World Scenarios
+### • Cloud Metadata Theft  
+Request made to:  
+`http://169.254.169.254/latest/meta-data/`
+
+### • Internal Jenkins RCE  
+`http://10.0.0.5/scriptText?script=...`
+
+### • Redis Cronjob Injection  
+Blind SSRF can write cron entries → reverse shell.
+
+### • Log4Shell-style backend exploitation  
+Backend logs attacker-controlled response headers.
+
+---
+
+## 5. 🏗️ Step-By-Step Lab Walkthrough
+
+### ✔ Step 1 — Open any product page  
+Browser automatically sends a **Referer** header.
+
+### ✔ Step 2 — Send request to Repeater  
+Example:
+```
+GET /product?productId=1 HTTP/2
+Referer: https://YOUR-LAB-ID.web-security-academy.net/
+```
+
+### ✔ Step 3 — Replace Referer with Collaborator URL  
+```
+Referer: https://abc123xyz.burpcollaborator.net
+```
+
+### ✔ Step 4 — Send request  
+Triggers analytics fetch → backend makes outbound request.
+
+### ✔ Step 5 — Poll Burp Collaborator  
+Look for:  
+- DNS interaction → SSRF exists  
+- DNS + HTTP → Fully confirmed blind SSRF  
+
+### ✔ Step 6 — Lab solved when Collaborator receives HTTP interaction.
+
+---
+
+## 6. 📸 Screenshot (Insert Your Image Here)
+
+**Screenshot of Burp Collaborator DNS/HTTP interaction when Referer is replaced with Collaborator URL**
+
+```
+![ Burp Collaborator DNS/HTTP interaction](../images/blind-ssrf-dns-hit.png)
+```
+
+---
+
+## 7. 🧲 High-Value Internal Targets
+
+### 🟦 Cloud Metadata  
+`169.254.169.254/latest/meta-data/`
+
+### 🟥 Internal Panels  
+`http://127.0.0.1:8080/admin`
+
+### 🟨 Docker/Kubernetes  
+`http://localhost:2375/containers/json`
+
+### 🟩 Internal Services  
+- Redis: 6379  
+- MongoDB: 27017  
+- Elasticsearch: 9200  
+- Jenkins: 8080  
+
+---
+
+## 8. 🔗 Multi-Chain Attack Possibilities
+- Blind SSRF → Port Scan → Find Jenkins → RCE  
+- Blind SSRF → AWS Metadata → Steal IAM keys → Full cloud takeover  
+- Blind SSRF → Redis Cronjob → Reverse shell  
+- Blind SSRF → Internal Admin API → Privilege escalation  
+
+---
+
+## 9. 🛡️ Remediation
+- Strict allowlisting of outbound domains  
+- Block internal IP ranges  
+- Disable redirect-following  
+- Disallow dangerous protocols (file://, gopher://, ftp://, redis:// etc.)  
+- Validate & normalize URLs  
+- Use SSRF-safe HTTP clients  
+
+---
+
+## 10. 📌 Final Summary
+Blind SSRF is detected using OAST tools like Burp Collaborator by injecting controlled URLs into headers such as **Referer** and observing DNS/HTTP callbacks. Even without responses, attackers can pivot into internal networks, cloud metadata services, or internal admin panels.
+
+---
