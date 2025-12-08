@@ -833,6 +833,8 @@ stockApi=/product/nextProduct?path=http://192.168.0.12:8080/admin/delete%3Fusern
 If stockApi follows redirects → point it to a redirect that lands on the internal admin.
 ```
 
+---
+
 # 🔥 Blind SSRF Lab-5 – OAST (OUT OF BAND TECHNIQUES)
 
 ---
@@ -916,9 +918,7 @@ Look for:
 
 **Screenshot of Burp Collaborator DNS/HTTP interaction when Referer is replaced with Collaborator URL**
 
-```
-![ Burp Collaborator DNS/HTTP interaction](../images/blind-ssrf-dns-hit.png)
-```
+![Burp Collaborator DNS/HTTP interaction](../images/blind-ssrf-dns-hit.png)
 
 ---
 
