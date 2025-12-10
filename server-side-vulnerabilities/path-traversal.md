@@ -679,3 +679,227 @@ Lab is solved.
 - ✔ Apply WAF rules for encoded traversal attempts  
 
 ---
+
+# 🔥Lab-5 Path Traversal – Bypassing Required Base Folder Constraint
+
+---
+
+## 📝 Overview
+Some applications force all file paths to start with a specific base directory such as:
+
+`/var/www/images/`
+
+However, after this prefix, an attacker can append traversal sequences like:
+
+`../../../etc/passwd`
+
+This allows escaping the restricted folder and accessing sensitive system files such as `/etc/passwd`.
+
+The vulnerability exists because the application validates only the **prefix**, not the **final resolved canonical path**.
+
+---
+
+## ❓ What This Topic Is About
+This technique exploits systems where:
+
+- The backend **prepends a fixed base directory**.
+- The validation only checks:  
+  `startsWith("/var/www/images/")`
+- Traversal after the prefix is NOT sanitized.
+- The system does not canonicalize paths before using them.
+
+**Result:**  
+Even when the application forces the path to begin correctly,  
+attackers can escape using traversal sequences added afterward.
+
+---
+
+## 🌍 Real-World Scenarios
+Real systems commonly expose this vulnerability in:
+
+### ✔ 1. Image Upload and Retrieval APIs
+Endpoints like:
+```
+/download?file=user.png
+```
+internally become:
+```
+/var/www/images/user.png
+```
+Attackers inject:
+```
+/var/www/images/../../../etc/passwd
+```
+
+### ✔ 2. Logging Systems
+Logs stored in `/var/log/app/` can be escaped to read system logs:
+```
+/var/log/app/../../../var/log/auth.log
+```
+
+### ✔ 3. Backup Utilities
+Backup fetchers often require a user folder prefix but allow traversal out.
+
+### ✔ 4. IoT and Router Firmware
+Most IoT firmware forces a base folder but trusts user-supplied filenames.
+
+### ✔ 5. Cloud Storage Wrappers
+Virtual folder systems improperly rebuild file paths → traversal becomes possible.
+
+---
+
+## 🧪 Lab Walkthrough — Base Folder Prefix → Traversal Bypass
+
+### 🎯 Lab Requirements
+The application enforces:
+```
+/var/www/images/
+```
+
+You **must** include this prefix.
+
+### ❌ Wrong Payloads (Rejected by Server)
+- `../../../etc/passwd`
+- `%2e%2e/%2e%2e/etc/passwd`
+- Encoded + decoding tricks  
+(Because the base prefix is missing)
+
+### ✅ Final Working Payload (Lab Solution)
+```
+/var/www/images/../../../etc/passwd
+```
+
+### ✔ Why It Works
+- Prefix requirement: **satisfied**
+- Traversal appended afterward: **unrestricted**
+- Final resolved canonical path becomes:
+```
+/etc/passwd
+```
+
+### 📸 Screenshot
+Add your proof screenshot here:
+
+![path traversal base prefix](../images/pt-base-prefix-bypass.png)
+
+---
+
+## 🎯 High-Value Endpoints (Target Files to Test Next)
+
+### 🖥 System Files
+```
+/etc/passwd
+/etc/shadow
+/etc/hosts
+/etc/hostname
+/proc/self/environ
+/proc/self/cmdline
+```
+
+### 🔐 Application Secrets
+```
+/var/www/.env
+/var/www/html/config.php
+/home/admin/.ssh/id_rsa
+/home/www-data/.bash_history
+```
+
+### 📜 Logs
+```
+/var/log/apache2/access.log
+/var/log/nginx/error.log
+```
+
+### ☁ Cloud & Container
+```
+/run/secrets/*
+/var/lib/docker/volumes/*
+```
+
+---
+
+## 🔗 Multi-Chain Attack Possibilities
+
+### ✔ 1. Credential Extraction → Authentication Takeover
+Read:
+```
+/var/www/.env
+```
+Extract DB creds → log into DB → modify or dump user data.
+
+### ✔ 2. SSH Private Key Theft
+Using traversal:
+```
+/home/admin/.ssh/id_rsa
+```
+→ Pivot deeper into the server.
+
+### ✔ 3. Log Poisoning → Remote Code Execution
+Write PHP payload into logs → include logs via traversal → RCE.
+
+### ✔ 4. Docker Breakout Enumeration
+Read:
+```
+/proc/self/cgroup
+```
+Identify container boundaries → plan privilege escalation.
+
+### ✔ 5. File Upload + Traversal → RCE
+Upload malicious PHP → include it via traversal → full shell.
+
+---
+
+## 🛡 Remediation (Real Fixes Only)
+
+### ❌ Weak / Incorrect Fixes
+- Blacklisting `../`
+- Rejecting input containing `".."` anywhere
+- Only checking prefix:
+  ```
+  if(path.startsWith("/var/www/images/"))
+  ```
+- Removing traversal substrings without canonicalization
+
+**All bypassable.**
+
+### ✔ Correct Fixes (Industry Standard)
+
+#### 1️⃣ Canonicalization (Mandatory)
+Always resolve full path using:
+```
+realpath(user_input)
+```
+Then ensure:
+```
+realpath(user_input).startswith(realpath(allowed_dir))
+```
+
+#### 2️⃣ Strict Allowlist
+Allow only controlled filenames, not paths.
+
+#### 3️⃣ Avoid Dynamic Paths
+Users should provide IDs, not filesystem paths.
+
+#### 4️⃣ Chroot / Jail
+Run the application in a sandbox where traversal cannot escape.
+
+---
+
+## 💡 Extra Notes / Attack Tips
+- Always try:
+  ```
+  required_path/../../../target
+  ```
+- Some servers allow **unlimited `../../` sequences** → a long chain often bypasses filters.
+- Combine with:
+  - encoding
+  - unicode
+  - null-byte
+  - double encoding
+- Try:
+  ```
+  /var/www/images/../../../../../../../../etc/passwd
+  ```
+  (just to detect validation weakness)
+
+---
