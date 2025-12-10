@@ -903,3 +903,230 @@ Run the application in a sandbox where traversal cannot escape.
   (just to detect validation weakness)
 
 ---
+
+# 🔥Lab-6 Path Traversal — Null Byte Injection (Bypassing Required File Extension)
+
+---
+
+## 1. **Overview**
+
+This vulnerability appears when an application forces user-supplied filenames to end with a specific extension like:
+
+- `.png`
+- `.jpg`
+- `.txt`
+
+But older/legacy backends treat a **null byte** (`%00`) as **end of string**, so:
+
+```
+../../../etc/passwd%00.png
+```
+
+is internally processed as:
+
+```
+../../../etc/passwd
+```
+
+Thus completely bypassing extension validation and allowing arbitrary file reads.
+
+---
+
+## 2. **What This Topic Is About**
+
+Null byte injection is used to bypass file-extension enforcement.
+
+Many applications implement weak checks such as:
+
+- “Does filename end with `.png`?”
+- “Does the string contain `.jpg`?”
+
+But systems using:
+
+- **C / C++ file handling**
+- **Legacy PHP (pre-5.3)**
+- **Custom low-level file APIs**
+
+treat `\0` as *string termination*, ignoring everything after `%00`.
+
+This allows attackers to break file restrictions and access sensitive files.
+
+---
+
+## 3. **Real-World Scenarios**
+
+✔ **1. Image loading endpoints**  
+Force `.png` but backend stops at `%00`.
+
+✔ **2. File download handlers**  
+Expect `.txt` but `%00` truncates extension.
+
+✔ **3. Backup restoration**  
+Only `.bak` allowed — null byte leaks real system files.
+
+✔ **4. Legacy PHP applications**  
+File functions break on null terminators.
+
+✔ **5. C/C++ services using `fopen()`**  
+`%00` becomes `\0` → early string termination.
+
+✔ **6. Authentication bypass via profile images**  
+User-supplied filenames abused to read internal files.
+
+---
+
+## 4. **Lab Walkthrough (Null Byte Extension Bypass)**
+
+### **Lab Condition**
+- File must end with `.png`
+- Server is vulnerable to null byte truncation
+- Path: `/var/www/images/` + *user input*
+
+### **Goal**
+Read:
+
+```
+/etc/passwd
+```
+
+### **Payload Used**
+```
+../../../etc/passwd%00.png
+```
+
+### **Why It Works**
+- Server checks string ends with `.png` → **TRUE**
+- Backend file reader processes only up to Null Byte:
+
+```
+../../../etc/passwd\0
+```
+
+So `.png` is **ignored**, resolving to:
+
+```
+/etc/passwd
+```
+
+**✔ Lab Solved**
+
+---
+
+## 📸 **Screenshot**
+
+![null byte path traversal](../images/null-byte-pt-success.png)
+
+---
+
+## 5. **High-Value Endpoints (Critical Targets)**
+
+### ✔ **System Files**
+- `/etc/passwd`
+- `/etc/shadow`
+- `/etc/hostname`
+- `/proc/self/environ`
+- `/proc/self/cmdline`
+
+### ✔ **Application Credentials**
+- `/var/www/.env`
+- `config.php`
+- `config.json`
+- `application.properties`
+
+### ✔ **SSH Keys**
+- `/home/*/.ssh/id_rsa`
+
+### ✔ **Server Logs**
+- `/var/log/apache2/error.log`
+- `/var/log/nginx/access.log`
+
+### ✔ **Cloud / Docker**
+- `/run/secrets/*`
+- `/var/lib/docker/volumes/*`
+
+Null byte bypass can expose extremely sensitive content despite extension filters.
+
+---
+
+## 6. **Multi-Chain Attack Possibilities**
+
+✔ **1. Credential Harvesting → DB Takeover**  
+Read `.env` → DB creds → RCE.
+
+✔ **2. SSH Key Theft → Server Takeover**  
+Read `id_rsa` → SSH into server.
+
+✔ **3. Log Poisoning → RCE**  
+Read logs → inject PHP payload → trigger via LFI.
+
+✔ **4. Upload + Traversal Combo**  
+Upload malicious file → null byte traversal → backend executes real file.
+
+✔ **5. Privilege Escalation via Config Files**  
+Read `/etc/sudoers` or `/etc/shadow`.
+
+---
+
+## 7. **Remediation (Correct Fixes)**
+
+### ❌ **Incorrect Fixes (Do NOT rely on):**
+- Checking `.endsWith(".png")`
+- Removing `%00` only
+- Blacklisting `../`
+- Rejecting only `../` patterns
+
+### ✔ **Correct Fixes**
+
+#### **1. Canonicalization (`realpath`)**
+```
+resolved = realpath(user_input)
+if !resolved.startswith("/var/www/images/"):
+    reject
+```
+
+#### **2. Block Null Bytes Properly**
+Reject:
+
+- `%00`
+- `\0`
+- `\x00`
+
+#### **3. Use Allowlisting**
+Only allow specific filenames that already exist.
+
+#### **4. Avoid Passing Raw Filenames**
+Use IDs:
+
+```
+GET /image?id=5
+```
+
+#### **5. Use Modern Frameworks**
+Modern systems correctly sanitize null bytes.
+
+---
+
+## 8. **Extra Notes / Attack Tips**
+
+✔ Test null byte variants:  
+- `%00`
+- `%2500`
+- `%u0000`
+- `\x00`
+
+✔ Try combining traversal + null byte:
+```
+../../../../etc/shadow%00.png
+```
+
+✔ Extension filtering bypass:
+```
+../../../etc/passwd%00.jpg
+```
+
+✔ Most effective on:
+- Legacy PHP
+- C/C++ applications
+- Custom file handlers
+
+---
