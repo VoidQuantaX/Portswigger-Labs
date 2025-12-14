@@ -1,71 +1,172 @@
-# File Upload Vulnerabilities – Lab: Web Shell / File Execution
+# ✅Lab-1 File Upload Vulnerabilities – Arbitrary File Upload → RCE
 
 ---
 
-## 🔹 Overview
-This lab demonstrates a *file upload* vulnerability where the application accepts user files and serves them from a path that executes server-side code.  
-By uploading a crafted file (web shell or file reader), an attacker can execute commands or read sensitive files on the server.
+## 1. Overview
+
+This vulnerability occurs when a web application allows users to upload files without enforcing strict validation on:
+
+- File extension
+- MIME type
+- File contents
+- Execution permissions
+
+As a result, an attacker can upload a **malicious executable file** (such as a PHP script) and trigger it via a web-accessible path, leading to **Remote Code Execution (RCE)**.
 
 ---
 
-## 🔹 Why this matters
-- Executing an uploaded script (PHP/JSP/ASP/Python) can lead to *full server compromise*.  
-- Even if direct execution fails, uploaded files can expose sensitive files (config, credentials) or be used to pivot to other systems.  
-- Many real engagements rely on the reliable two-step method: *upload benign → discover path → upload shell → execute*.
+## 2. What This Topic Is About
+
+File upload vulnerabilities arise when an application assumes uploaded files are safe and does not verify:
+
+- Whether the file is executable
+- Whether the upload directory allows code execution
+- Whether user-controlled filenames are trusted
+
+The attacker abuses this trust to upload a **server-side script** and execute arbitrary commands or read sensitive files.
 
 ---
 
-## 🔹 Methodology / Lab Walkthrough
+## 3. Real-World Scenarios
 
-*Goal:* discover the storage URL for uploads, upload an exploit file (web shell or file reader), request the stored file and obtain secret / command output.
+Common real-world appearances of this vulnerability:
 
-1. *Discover upload path*
-   - Upload a benign image (avatar) via the upload form.  
-   - Open the account page and inspect the network request for the image GET to find the canonical stored path and any random prefix.
+✔ Profile image uploads allowing `.php` files  
+✔ Attachment upload features in CMS panels  
+✔ Support ticket file uploads  
+✔ Legacy PHP applications  
+✔ Misconfigured web servers allowing execution in `/uploads/`  
 
-2. *Prepare exploit*
-   - Create a small web shell or file reader, e.g.:  
-     php
-     <?php echo file_get_contents('/home/carlos/secret'); ?>
-     
-   - Name it with a plausible extension (exploit.php, exploit.phtml, or exploit.php.jpg depending on the target checks).
+Impact often includes:
 
-3. *Upload exploit*
-   - Intercept the upload POST in Burp. Replace the file part with your exploit content (keep CSRF/form fields unchanged).  
-   - If the site expects image Content-Type, try setting Content-Type: image/jpeg or use GIF stub trick.
-
-4. *Request the uploaded file*
-   - Use the exact GET from step 1 (same Host and session cookie) to request the stored file URL:  
-     GET /files/avatars/exploit.php  
-   - If the file executes, you will see the secret or command output.
-
-5. *If execution fails*
-   - Try alternate extensions, double-extension tricks, .phtml, .php5, or GIF-stub.  
-   - If only source is returned (no execution), you still gain intelligence (read code) — try other upload endpoints or storage paths.
+- Full server compromise
+- Credential theft
+- Database access
+- Pivoting to other internal services
 
 ---
 
-## 🔹 Proof of Exploit
-![File upload exploit proof — web shell output / secret read](../images/file-upload-lab1.png)  
-(Screenshot showing the uploaded exploit.php being executed and returning sensitive data / command output — strongest single proof.)
+## 4. Lab Walkthrough (File Upload → Execution)
+
+### Lab Condition
+
+- Application allows avatar upload
+- Uploaded files are stored inside a **web-accessible directory**
+- No restriction on executable file extensions
+
+### Goal
+
+Retrieve Carlos’s secret from:
+
+```
+/home/carlos/secret
+```
+
+### Exploit Used
+
+Uploaded PHP file (`exploit.php`):
+
+```php
+<?php
+echo file_get_contents('/home/carlos/secret');
+?>
+```
+
+### Attack Flow
+
+1. Login as low-privileged user
+2. Upload `exploit.php` as avatar
+3. Application stores file in:
+
+```
+/files/avatars/exploit.php
+```
+
+4. Browser automatically requests the uploaded file
+5. PHP code executes on the server
+6. Secret is revealed in the response
+
+✔ Lab solved
 
 ---
 
-## 🔹 Security Impact
-- Remote code execution → full server takeover.  
-- Exposure of DB credentials, config files, SSH keys → long-term compromise.  
-- Ability to pivot to internal services or maintain persistence via backdoors.
+## 5. Screenshot Proof (Exploit Execution)
+
+The following screenshot shows successful execution of `exploit.php` and retrieval of Carlos’s secret.
+
+![](../images/file-upload-lab1.png)
 
 ---
 
-## 🔹 Remediation
-- Validate uploads *server-side*: allowlist extensions and MIME types.  
-- Validate file contents (magic bytes), but do not rely solely on it.  
-- Store uploads *outside webroot* or serve them from a non-executable domain/subdomain.  
-- Rename uploaded files to safe, non-executable names; never use user-supplied filenames.  
-- Apply size limits, scanning, and strict ACLs for uploaded content.
+## 6. High-Value Targets After Upload Execution
+
+Once RCE is achieved, attackers commonly target:
+
+### Sensitive Files
+
+```
+/home/carlos/secret
+/etc/passwd
+/etc/shadow
+```
+
+### Application Secrets
+
+```
+/var/www/.env
+config.php
+```
+
+### SSH Keys
+
+```
+/home/*/.ssh/id_rsa
+```
 
 ---
+
+## 7. Multi-Chain Attack Possibilities
+
+A simple file upload flaw can be chained into:
+
+✔ File Upload → Web Shell → Full RCE  
+✔ File Upload → Credential Theft → Account Takeover  
+✔ File Upload → Database Access → Data Exfiltration  
+✔ File Upload → Privilege Escalation  
+
+This makes file upload vulnerabilities **high-impact and critical**.
+
+---
+
+## 8. Remediation (How to Fix)
+
+❌ Insecure Approaches:
+
+- Relying only on file extension checks
+- Trusting `Content-Type` headers
+- Allowing uploads inside web root
+
+✔ Secure Fixes:
+
+- Allowlist extensions strictly
+- Verify file contents (magic bytes)
+- Store uploads outside web root
+- Disable script execution in upload directories
+- Rename uploaded files (random UUIDs)
+
+---
+
+## 9. Extra Notes / Pentester Tips
+
+- Always check if upload paths are web-accessible
+- Test execution by requesting the file directly
+- Even “image-only” uploads may allow bypass
+- Execution can also occur via includes or admin previews
+
+---
+
+> **Final Takeaway:**  
+> File upload vulnerabilities are dangerous not because files are uploaded — but because the server later **executes or processes them**.
 
 # File Upload – Lab 2: Web-shell Upload via Content-Type Restriction Bypass
 
