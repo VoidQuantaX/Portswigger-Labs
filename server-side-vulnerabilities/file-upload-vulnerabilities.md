@@ -461,3 +461,256 @@ Always test:
 > If a file can be uploaded and accessed — assume RCE until proven otherwise.
 
 ---
+
+# 📌 LAB-3 NOTES — Bypassing Execution Restrictions via Path Traversal
+
+---
+
+## 🔎 Overview
+
+This lab demonstrates how file upload protections can be bypassed even when **script execution is disabled** inside upload directories.
+
+The application attempts to defend against web shells by serving uploaded PHP files as plain text.  
+However, a **secondary vulnerability (path traversal in the filename)** allows the uploaded PHP file to be written into a different, executable directory.
+
+This results in **full Remote Code Execution (RCE)** despite defense-in-depth controls.
+
+---
+
+## 🧠 What Is This Topic?
+
+**Core Topic**
+
+> File upload exploitation combined with execution bypass using directory traversal
+
+**Key Concepts Involved**
+
+- MIME-type validation bypass  
+- Non-executable upload directories  
+- Directory traversal (`../`)  
+- URL encoding to bypass filters  
+- Different execution behavior across directories  
+
+This is a classic **defense-in-depth failure**:
+
+- Defense 1 — MIME-type validation ❌ bypassed  
+- Defense 2 — No execution in upload folder ❌ bypassed via traversal  
+
+---
+
+## 🌍 Real-World Scenarios (Out-of-Box)
+
+### 1️⃣ Hardened Upload Folder but Weak Path Handling
+
+Uploads directory configured with:
+
+php_flag engine off  
+
+Developers assume uploaded files are safe, but traversal allows escaping into executable directories.
+
+---
+
+### 2️⃣ CDN / Reverse Proxy Mismatch
+
+- Upload handled by one server  
+- File served by another  
+- Different execution rules apply  
+
+Result:  
+File is non-executable in `/uploads` but executable in `/`.
+
+---
+
+### 3️⃣ API Upload with Partial Sanitization
+
+Filename sanitized **after** traversal resolution.
+
+Example:
+
+avatars/../exploit.php  
+
+Resolved internally as:
+
+/exploit.php  
+
+---
+
+### 4️⃣ Misconfigured Nginx + PHP-FPM
+
+- Nginx blocks PHP execution in `/uploads`
+- PHP-FPM executes scripts elsewhere
+- Traversal bypasses Nginx rules
+
+---
+
+### 5️⃣ Containerized Environments
+
+- Upload volume mounted differently
+- Traversal writes into application root
+- PHP interpreter executes the file
+
+---
+
+## 🧪 Lab Walkthrough (Exact Steps)
+
+### Step 1 — Login
+
+Username: `wiener`  
+Password: `peter`
+
+---
+
+### Step 2 — Initial Upload Attempt (No Execution)
+
+Upload file:
+
+exploit.php  
+
+Intercept request and modify header:
+
+Content-Type: image/png  
+
+Result:
+
+- File uploads successfully  
+- PHP source is returned as text  
+- No execution occurs  
+
+✔ Confirms non-executable upload directory
+
+---
+
+### Step 3 — Identify Secondary Vulnerability
+
+Observation:
+
+- Filename is not properly sanitized  
+- Directory traversal sequences are accepted  
+
+---
+
+### Step 4 — Path Traversal Payload
+
+Change filename to:
+
+../exploit.php  
+
+URL-encoded form:
+
+..%2Fexploit.php  
+
+Stored internally as:
+
+avatars/../exploit.php  
+
+Resolved path:
+
+/exploit.php  
+
+---
+
+### Step 5 — Trigger Execution
+
+Access file directly:
+
+GET /file/exploit.php HTTP/1.1   
+
+✔ PHP executed  
+✔ Secret revealed  
+✔ Lab solved  
+
+---
+
+## Evidence/Proof
+
+**Screenshot 1 — Upload succeeds but PHP does NOT execute**
+
+![PHP not executable](../images/upload-no-execution.png)
+
+
+**Screenshot 2 — Path traversal used during upload**
+
+![path traversal secondary culnerability](../images/upload-with-traversal.png)
+
+
+**Screenshot 3 — exploit.php executed and Carlos secret revealed**
+
+![direct access by get request](../images/exploit-execution.png)
+
+---
+
+## 🎯 High-Value Endpoints
+
+Always test uploads that:
+
+- Allow filename control  
+- Are stored in restricted directories  
+
+Common targets:
+```
+/avatar  
+/uploads  
+/profile/upload  
+/media  
+/files  
+/assets  
+/api/upload  
+```
+
+---
+
+## 🔗 Multi-Chain Attack Possibilities
+
+**Chain 1**
+
+Upload → Traversal → RCE → Read `.env` → DB credentials  
+
+**Chain 2**
+
+Upload → RCE → Write persistent backdoor  
+
+**Chain 3**
+
+Upload → RCE → Source code disclosure → Further vulnerabilities  
+
+**Chain 4**
+
+Upload → RCE → Privilege escalation via cron / jobs  
+
+---
+
+## 💥 Impact
+
+- Full Remote Code Execution  
+- Bypass of multiple security layers  
+- Server takeover  
+- Data exfiltration  
+- Persistent compromise  
+
+**Severity: CRITICAL**
+
+---
+
+## 🛡️ Remediation
+
+✔ Normalize and validate file paths  
+✔ Reject `../` before saving files  
+✔ Enforce upload directories at filesystem level  
+✔ Disable execution using web server **and** OS permissions  
+✔ Rename uploaded files server-side  
+✔ Validate magic bytes, not headers  
+
+---
+
+## 🧠 Extra Notes / Pentester Tips
+
+- Execution blocked ≠ safe  
+- Always test traversal after upload  
+- Try encoded and double-encoded paths  
+- Different directories = different execution rules  
+
+---
+
+## 🧩 One-Line Takeaway
+
+> When uploads aren’t executable, don’t stop — escape the directory.
