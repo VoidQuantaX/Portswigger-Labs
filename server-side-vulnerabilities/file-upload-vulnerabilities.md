@@ -1105,13 +1105,13 @@ Result:
 
 ### Screenshot 1 — PHP Shell Upload via Null Byte & Double Extension
 
-![](../images/upload-null-byte-double-extension.png)
+![Null Byte & Double Extension](../images/upload-null-byte-double-extension.png)
 
 ---
 
 ### Screenshot 2 — Carlos Secret Retrieved via exploit.php Execution
 
-![](../images/carlos-secret-exploit-php.png)
+![exploit.php Execution](../images/carlos-secret-exploit-php.png)
 
 ---
 
