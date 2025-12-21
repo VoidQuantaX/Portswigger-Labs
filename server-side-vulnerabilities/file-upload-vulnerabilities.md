@@ -1415,3 +1415,315 @@ GET /files/avatars/polyglot.php HTTP/1.1
 ## 10. One-Line Takeaway
 
 > Even strong content-based validation can be bypassed using polyglot files if execution depends on file extension.
+
+---
+
+
+# ✅ File Upload Vulnerabilities — Race Condition Attacks
+
+---
+
+## 1. Overview
+
+This topic covers *file upload race condition vulnerabilities, where a server briefly allows access to an uploaded file **before validation or deletion completes*.
+
+The attacker does *not bypass validation*.  
+Instead, they win by *timing* — accessing or executing the file during a tiny time window.
+
+This is an *advanced real-world bug bounty & pentesting vulnerability* that often leads to:
+
+- Remote Code Execution (RCE)
+- Stored XSS
+- Server-side attacks
+
+---
+
+## 2. What Is This Topic?
+
+*Simple definition:*
+
+> A race condition in file upload happens when a file is temporarily accessible before the server finishes validating or deleting it.
+
+The vulnerability exists because:
+
+- Upload and validation are *not atomic*
+- File becomes accessible *too early*
+- Attacker acts *faster than validation*
+
+⏱️ *Milliseconds matter*
+
+---
+
+## 3. How Secure Uploads Are SUPPOSED to Work
+
+*Correct flow (SAFE):*
+
+Upload → Temporary folder (random name) ↓ Validate content ↓ Move to real folder (if safe)
+
+✔ File never accessible  
+✔ Random filename  
+✔ No execution window  
+
+---
+
+## 4. How Developers Accidentally Create the Vulnerability
+
+*Broken flow (DANGEROUS):*
+
+Upload → Public folder ↓ Validate file ↓ Delete if malicious
+
+⚠️ For a short time:
+
+- File exists
+- File is reachable
+- File may be executable
+
+➡ *Race window created*
+
+---
+
+## 5. Real-World Scenarios (DETAILED)
+
+### Scenario 1: Avatar Upload → Remote Code Execution (MOST COMMON)
+
+*Context*
+- Website allows profile picture upload
+- Uploaded files go to /uploads/
+- Validation happens after saving
+
+*What attacker sees*
+- Upload request succeeds briefly
+- File URL is predictable
+
+*Impact*
+- PHP shell executes before deletion
+- Full server compromise
+
+---
+
+### Scenario 2: URL-Based Image Upload (VERY DANGEROUS)
+
+*Context*
+- Feature: “Upload image from URL”
+- Server downloads remote file
+- Saves locally
+- Then validates
+
+*Why it’s worse*
+- Framework protections bypassed
+- Custom logic written
+- Timing bugs common
+
+*Impact*
+- Attacker hosts malicious file
+- Server fetches & executes it
+- RCE without upload form
+
+---
+
+### Scenario 3: Temporary Folder Guessing
+
+*Context*
+- Server uses:
+
+/tmp/upload_65f2a9c1/
+
+- Folder name generated via uniqid()
+
+*Attacker*
+- Predicts or brute-forces folder
+- Requests file before validation ends
+
+*Impact*
+- Code execution
+- File disclosure
+
+---
+
+### Scenario 4: Stored XSS via HTML / SVG Upload
+
+*Context*
+- PHP execution disabled
+- .html or .svg allowed
+
+*Attacker*
+- Uploads malicious HTML/SVG
+- Hits it before deletion
+- Or it remains accessible
+
+*Impact*
+- Stored XSS
+- Cookie theft
+- Account takeover
+
+---
+
+### Scenario 5: File Parser Attacks (Last Resort)
+
+*Context*
+- Server parses:
+- .xml
+- .doc
+- .xls
+
+*Attacker*
+- Injects malicious XML
+- XXE triggers during parsing
+
+*Impact*
+- Internal file reads
+- SSRF
+- Data exfiltration
+
+---
+
+## 6. Lab Walkthrough (Race Condition Scenario — FULL STEPS)
+
+*Scenario Used:*  
+Avatar upload → PHP race condition execution
+
+---
+
+### Step 1: Prepare malicious payload
+
+```php
+<?php system($_GET['cmd']); ?>
+```
+
+---
+
+### Step 2: Upload malicious file
+
+Upload shell.php
+*Server saves it to:*
+/uploads/shell.php
+
+---
+
+### Step 3: Validation starts
+
+- MIME check
+- Content check
+- Takes milliseconds (or more for large files)
+
+---
+
+### Step 4: Attacker races the server
+
+*Immediately request:*
+- GET /uploads/shell.php?cmd=id
+
+---
+
+### Step 5: Outcome
+
+- PHP executes
+- Server deletes file after
+- Too late
+
+💥 RCE achieved
+
+---
+
+### Step 6 (Optimization): Slow validation
+
+- Upload very large file
+- Put payload at top
+- Add junk data after
+➡ Larger race window
+
+---
+
+### 7. High-Value Endpoints to Test
+
+*Always test uploads at:*
+```
+/upload
+/avatar
+/profile/upload
+/media
+/files
+/images
+/assets
+/api/upload
+```
+
+*Execution paths:*
+```
+/uploads/
+/media/
+/files/
+/images/
+```
+
+---
+
+### 8. High-Value File Types for Race Attacks
+
+*Server-side execution:*
+```
+- .php
+- .jsp
+- .asp
+- .aspx
+```
+
+*Client-side execution:*
+```
+- .html
+- .svg
+```
+
+*Parser targets:*
+```
+- .xml
+- .doc
+- .xls
+```
+
+---
+
+## 9. Multi-Chain Attack Possibilities
+
+### Chain 1
+Race condition → RCE → Read .env → DB takeover
+
+### Chain 2
+Race condition → RCE → SSH keys → Lateral movement
+
+### Chain 3
+Race condition → Stored XSS → Admin hijack
+
+### Chain 4
+Race condition → XXE → File disclosure → SSRF
+
+### Chain 5
+Race condition → Webshell → Persistence → Privilege escalation
+
+---
+
+## 10. Remediation (Defensive View)
+
+✔ Upload to non-public temp directory
+✔ Validate before moving file
+✔ Use random filenames
+✔ Disable execution in upload folders
+✔ Strip active content (SVG / HTML)
+✔ Atomic file operations
+✔ Avoid custom upload logic
+✔ Enforce strict allowlists
+
+
+---
+
+## 11. Extra Notes / Attacker Tips
+
+- Race conditions are logic bugs, not input bugs
+- Hard to detect via scanners
+- Source code review helps
+- Black-box testing needs automation
+- Slowing the server helps attackers
+- URL uploads are high-risk
+- PUT method uploads often forgotten
+
+---
