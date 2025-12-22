@@ -605,3 +605,320 @@ email host ip url file name task
 > If input reaches the OS and output is hidden — assume blind command injection.
 
 ---
+
+#Lab-3 🧨 Blind OS Command Injection via Output Redirection
+
+---
+
+## 1. Overview
+
+Blind OS Command Injection occurs when an application executes operating system commands using user-controlled input *without returning the output* in the HTTP response.
+
+Even though output is hidden, attackers can still:
+
+- Execute arbitrary OS commands
+- Redirect output to files
+- Read sensitive data
+- Achieve full server compromise
+
+This lab demonstrates how *output redirection* turns a blind vulnerability into a *visible, confirmable exploit*.
+
+---
+
+## 2. What Is This Topic About?
+
+Blind OS Command Injection focuses on scenarios where:
+
+- Command execution occurs
+- Output is suppressed or not reflected
+- Exploitation relies on *side effects*
+
+Key idea:
+
+> If you can execute commands and write files, you can always retrieve the output later.
+
+This is a *real-world exploitation technique*, not lab-only behavior.
+
+---
+
+## 3. LAB WALKTHROUGH (Exact Attack Flow)
+
+### Step 1 — Identify Injection Point
+
+- Application contains a feedback / contact feature
+- User input is processed by an OS-level command
+- No command output is shown → *blind injection*
+
+---
+
+### Step 2 — Inject Time-Based Payload (Proof of Execution)
+
+Payload applied:
+
+email=test@test.com||ping -c 10 127.0.0.1||
+
+Result:
+
+- Application response delayed by ~10 seconds
+- Confirms OS command execution
+
+---
+
+### Step 3 — Redirect Command Output to File
+
+Payload used:
+
+email=test@test.com||whoami>/var/www/images/output.txt||
+
+What happens internally:
+
+- whoami executes on server
+- Output is written to output.txt
+- No output shown in response
+
+---
+
+### Step 4 — Fetch the Output File
+
+- Application loads images using a filename parameter
+- Attacker manually changes filename to:
+
+output.txt
+
+Result:
+
+- Browser displays OS command output
+- Blind injection successfully converted into visible output
+
+---
+
+### Step 5 — Lab Completion
+
+- Username retrieved
+- Secret confirmed
+- Lab solved successfully 🎯
+
+---
+
+## 4. Evidence
+
+### Screenshot 1 — Payload Injection (Time Delay / Output Redirection)
+
+![](../images/blind-osci-payload-redirection.png)
+
+### Screenshot 2 — Fetching Output File via Filename Parameter
+
+![](../images/blind-osci-output-fetch.png)
+
+---
+
+## 5. Real-World Scenarios (Out-of-the-Box)
+
+### Scenario 1 — Feedback / Contact Forms (Very Common)
+
+Application behavior:
+
+- Sends email or logs feedback using OS command
+
+Attack payload:
+
+email=test@test.com; id > /var/www/html/id.txt
+
+Impact:
+
+- OS command execution
+- Output accessible via browser
+- Server user enumeration
+
+---
+
+### Scenario 2 — Image Processing Pipelines
+
+Application behavior:
+
+- Resizes or converts images using system tools
+
+Attack:
+
+image=test.jpg; whoami > /uploads/out.txt
+
+Impact:
+
+- Remote command execution
+- Data exfiltration
+- Often escalates to full shell
+
+---
+
+### Scenario 3 — Admin / Maintenance Endpoints
+
+Endpoints:
+```
+- /backup
+- /cleanup
+- /diagnostics
+```
+
+Attack:
+
+task=cleanup; cat /etc/passwd > /var/www/images/passwd.txt
+
+Impact:
+
+- System file disclosure
+- Credential harvesting
+- Privilege escalation paths
+
+---
+
+### Scenario 4 — Log File Abuse
+
+Attack chain:
+
+1. Inject command
+2. Redirect output into log directory
+3. Read logs via browser
+
+Impact:
+
+- Stealthy data exfiltration
+- Persistent backdoors
+
+---
+
+### Scenario 5 — Cloud / Container Environments
+
+Payloads:
+
+whoami > /var/www/images/user.txt cat /proc/self/environ > /var/www/images/env.txt
+
+Impact:
+
+- Cloud credential leakage
+- Container escape paths
+- Infrastructure compromise
+
+---
+
+## 6. High-Value Endpoints to Test
+
+### Form-Based
+```
+- /feedback
+- /contact
+- /support
+- /report
+```
+
+Parameters:
+```
+- email
+- message
+- comment
+- reason
+```
+
+---
+
+### File / Media Processing
+```
+- /upload
+- /resize
+- /convert
+- /process
+- /thumbnail
+```
+
+---
+
+### Backend / Admin
+```
+- /backup
+- /restore
+- /health
+- /maintenance
+- /diagnostics
+```
+
+---
+
+### URL-Based
+```
+- /fetch
+- /import
+- /load-url
+- /webhook-test
+```
+
+---
+
+## 7. Multi-Chain Attack Possibilities
+
+### Chain 1 — Blind Injection → Output File → Web Shell
+
+1. Write PHP payload into web directory
+2. Access via browser
+3. Full remote shell
+
+---
+
+### Chain 2 — Blind Injection → File Disclosure → Credential Theft
+
+1. Dump /etc/passwd
+2. Dump .env
+3. Extract DB / API keys
+4. Lateral movement
+
+---
+
+### Chain 3 — Blind Injection → Cloud Takeover
+
+1. Dump environment variables
+2. Extract cloud keys
+3. Access cloud services
+4. Infrastructure compromise
+
+---
+
+### Chain 4 — Blind Injection → Privilege Escalation
+
+1. Identify running user
+2. Enumerate sudo permissions
+3. Exploit misconfigurations
+4. Root access
+
+---
+
+## 8. Remediation (Defensive View)
+
+- Do NOT pass user input to shell commands
+- Use native APIs instead of OS execution
+- Apply strict allowlists
+- Avoid shell interpretation
+- Disable output redirection
+- Lock filesystem permissions
+- Make upload directories non-executable
+- Monitor unexpected file creation
+
+---
+
+## 9. Extra Notes / Pentester Tips
+
+- Blind ≠ low impact
+- File write access is as dangerous as direct output
+- Always look for:
+  - Writable directories
+  - Served directories
+- Output redirection works even when:
+  - echo fails
+  - errors are hidden
+  - responses are sanitized
+
+---
+
+## 10. One-Line Summary
+
+> Blind OS command injection becomes fully exploitable when attackers redirect command output into a web-accessible file and retrieve it via the application.
+
+
+---
