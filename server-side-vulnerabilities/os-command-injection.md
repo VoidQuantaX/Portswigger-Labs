@@ -361,7 +361,7 @@ The following evidence shows successful blind OS command injection using a *10-s
 
 ### 📸 Time Delay Confirmation
 
-!ping time delay OS command[](../images/blind-osci-ping-delay.png)
+![ping time delay OS command](../images/blind-osci-ping-delay.png)
 
 ---
 
