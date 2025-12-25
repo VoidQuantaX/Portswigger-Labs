@@ -268,54 +268,233 @@ Admin access
 
 ---
 
-# Access Control – Lab 2: Unprotected Admin Functionality (via HTML Source)
+# Lab-2 🔐 Broken Access Control – Unprotected Admin Panel (Client-Side Exposure)
 
 ---
 
 ## 🔹 Overview
-This lab demonstrates a *broken access control* vulnerability where an administrative panel was hidden in the HTML source code but not protected with any authentication or authorization mechanism.
+
+Broken access control occurs when an application fails to properly restrict who can access sensitive functionality or resources.
+
+A very common real-world variant is when *administrative functionality is hidden inside client-side code (HTML / JavaScript)* but is *not protected by server-side authorization checks*.
+
+This is known as *security by obscurity*, and it leads directly to full application compromise.
 
 ---
 
-## 🔹 Methodology
+## 🔹 What Is This Topic?
 
-1. *Reconnaissance*
-   - Viewed the page source (Ctrl+U).
-   - Found a hidden link pointing to /administrator-panel.
+This topic focuses on:
 
-2. *Exploitation*
-   - Accessed the hidden URL directly in the browser.
-   - The admin panel loaded without requiring admin credentials.
+- Vertical access control failures  
+- Unprotected admin functionality  
+- Client-side exposure of sensitive endpoints  
+- Misuse of security by obscurity  
 
-3. *Privilege Escalation*
-   - Deleted the user carlos via the exposed admin functionality.  
-   - This confirmed that the application lacked proper access control.
+### Key Concept
 
----
+> Hiding an admin URL in JavaScript does NOT make it secure.
 
-## 🔹 Proof of Exploit
-![Hidden admin link in page source](../images/access-control-lab2-viewsource.png)  
-(Screenshot showing hidden admin link in HTML source)  
-
-![Lab solved – user deleted](../images/access-control-lab2-solved.png)  
-(Screenshot showing successful deletion of carlos account and lab completion)  
+If the server does not validate the user’s role, the endpoint is effectively public.
 
 ---
 
-## 🔹 Security Impact
-- Unauthorized users could access administrative interfaces.  
-- Potential consequences include:
-  - Account deletions or modifications.  
-  - Full takeover of user data and application functionality.  
-  - Compromise of business-critical operations.  
+## 🔹 Lab Walkthrough (Step-by-Step)
+
+### Step 1: Load the application
+
+- Log in as a normal, low-privileged user
+- No admin functionality visible in the UI
 
 ---
 
-## 🔹 Remediation
-- Enforce *server-side authentication and authorization checks*.  
-- Do not rely on obscurity (hiding links in HTML or JS).  
-- Restrict access to admin routes via RBAC, strong authentication, and network controls.  
-- Regularly review source code and remove hardcoded sensitive URLs.  
+### Step 2: View page source / JavaScript files
+
+- Inspect HTML source
+- Open linked JavaScript files
+
+During inspection, a hidden admin endpoint is discovered inside a JS file:
+
+/administrator-panel-yb556
+
+This endpoint is exposed client-side but not linked in the UI.
+
+---
+
+### Step 3: Manually access the admin endpoint
+
+- Send a direct GET request to the discovered path
+- No role validation is performed by the server
+
+The admin panel loads successfully.
+
+---
+
+### Step 4: Perform admin action
+
+- Locate user management functionality
+- Delete user carlos
+
+---
+
+### Step 5: Lab result
+
+- Admin action executed successfully
+- No authorization checks enforced
+
+✅ Lab solved  
+❌ Broken access control confirmed
+
+---
+
+## 🔹 Evidence
+
+### 🧾 Client-Side Disclosure of Admin Endpoint (View Source)
+
+![admin panel hidden in publicly accessible JS file](../images/access-control-lab2-viewsource.png)
+
+---
+
+## 🔹 Real-World Scenarios (Comprehensive)
+
+### 🧩 Scenario 1: Admin URLs Leaked in JavaScript (MOST COMMON)
+
+- Admin routes embedded in JS files
+- Role checks handled only on frontend
+
+*Impact:*  
+Unauthenticated or low-privileged users gain full admin access
+
+---
+
+### 🧩 Scenario 2: SPA Framework Route Exposure
+
+- React / Angular admin routes visible in bundled JS
+- Backend trusts frontend routing
+
+*Impact:*  
+Direct API or route access bypasses UI restrictions
+
+---
+
+### 🧩 Scenario 3: Hardcoded Admin Paths in HTML
+
+- Admin links commented out
+- Hidden via CSS or JS
+
+*Impact:*  
+Anyone viewing source can discover sensitive functionality
+
+---
+
+### 🧩 Scenario 4: Mobile & Hybrid Applications
+
+- Admin APIs exposed via reverse engineering
+- No server-side role validation
+
+*Impact:*  
+Complete backend compromise
+
+---
+
+### 🧩 Scenario 5: Feature Flags Without Authorization
+
+- Admin features enabled accidentally
+- No permission checks enforced
+
+*Impact:*  
+Privilege escalation
+
+---
+
+## 🔹 High-Value Endpoints to Always Test
+```
+/admin  
+/administrator  
+/admin-panel-*  
+/manage  
+/control  
+/dashboard  
+/internal  
+/superuser  
+/api/admin/*
+```
+
+---
+
+📌 Especially endpoints that:
+- Delete users  
+- Modify roles  
+- Reset passwords  
+- Access sensitive data  
+
+---
+
+## 🔹 Multi-Chain Attacks (Real Impact)
+
+### 🔗 Chain 1: Access Control → Account Takeover
+
+Admin panel  
+→ Password reset  
+→ Account takeover  
+
+---
+
+### 🔗 Chain 2: Access Control → RCE
+
+Admin access  
+→ File upload / config edit  
+→ Remote code execution  
+
+---
+
+### 🔗 Chain 3: Access Control → Data Breach
+
+Admin export functionality  
+→ PII disclosure  
+→ Compliance violations  
+
+---
+
+### 🔗 Chain 4: Access Control → Persistence
+
+Create hidden admin account  
+→ Long-term backdoor access  
+
+---
+
+## 🔹 Remediation (Defensive View)
+
+### ✅ Correct Fixes
+
+- Enforce server-side authorization on every request
+- Validate user role before executing admin actions
+- Implement RBAC / ABAC
+- Protect admin routes with middleware
+
+---
+
+### ❌ What Never Works
+
+- Hiding links in JavaScript
+- Obscure or random URLs
+- Client-side role checks only
+
+---
+
+## 🔹 Extra Notes / Attacker Mindset
+
+- Viewing source is basic reconnaissance
+- If the browser can see it, attackers can too
+- UI restrictions are not security controls
+- Access control failures are OWASP Top 1 for a reason
+
+---
+
+## 🧠 One-Line Takeaway
+
+> If an admin endpoint is exposed client-side and not protected server-side, it is public — not hidden.
+
 
 ---
 
