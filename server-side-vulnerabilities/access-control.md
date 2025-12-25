@@ -498,54 +498,265 @@ Create hidden admin account
 
 ---
 
-# Access Control – Lab 3: Parameter-Based Access Control
+
+# Lab-3 🔐 Parameter-Based Access Control — Cookie Manipulation (Admin Privilege Escalation)
 
 ---
 
 ## 🔹 Overview
-This lab demonstrates an insecure access control mechanism where user roles are determined by *parameters* (such as query strings, cookies, or hidden fields) that are directly modifiable by the client.  
-By tampering with these parameters, an attacker can escalate privileges and gain administrative access.
+
+Parameter-based access control vulnerabilities occur when an application determines user privileges using *client-controlled values*.
+
+In this lab, the application relies on a *cookie value* (admin) to decide whether a user has administrative privileges.
+
+Because cookies are fully controlled by the browser, an attacker can *modify them to escalate privileges*.
+
+This is a *critical Broken Access Control* vulnerability and is extremely common in real-world applications.
 
 ---
 
-## 🔹 Methodology
+## 🔹 What Is This Topic?
 
-1. *Normal Login*
-   - Logged in as a regular user.  
-   - Observed a parameter in the request: admin=false.
+This vulnerability falls under:
 
-2. *Tampering the Parameter*
-   - Captured the request in Burp Suite Proxy while accessing the *Admin Panel*.  
-   - Modified the parameter from admin=false → admin=true.  
-   - Successfully accessed the *admin interface*.
+- *Broken Access Control*
+- *Vertical Privilege Escalation*
 
-3. *Exploitation*
-   - Performed an administrative action: deleted the user carlos.  
-   - Lab solved ✅
+*Core mistake:*
 
----
+> Authorization is decided using client-side data instead of server-side checks.
 
-## 🔹 Proof of Exploit
-![Parameter tampering to access admin panel](../images/access-control-lab3-solved.png)
+Anything sent by the browser *cannot be trusted*, including:
 
----
-
-## 🔹 Security Impact
-- Any user can escalate privileges by altering request parameters.  
-- Potential consequences:
-  - Full admin account takeover.  
-  - Ability to delete or modify user data.  
-  - Compromise of the entire application.
+- Cookies
+- URL parameters
+- Headers
+- Hidden HTML fields
+- JavaScript values
 
 ---
 
-## 🔹 Remediation
-- Never store authorization or role information in user-controllable parameters.  
-- Implement *server-side role-based access control (RBAC)*.  
-- Validate user roles on every sensitive action.  
-- Use secure session handling instead of hidden fields or query strings.
+## 🔹 Lab Walkthrough (Step-by-Step)
+
+### 1️⃣ Log in as a normal user
+
+Credentials used:
+
+- *Username:* wiener
+- *Password:* peter
 
 ---
+
+### 2️⃣ Attempt to access admin panel
+
+GET /admin
+
+*Result:*
+- Access denied
+
+---
+
+### 3️⃣ Inspect cookies / request headers
+
+Observed cookie:
+
+admin=false
+
+This reveals that *admin privileges are decided via a cookie*.
+
+---
+
+### 4️⃣ Modify the cookie value
+
+Change:
+
+admin=false
+
+To:
+
+admin=true
+
+---
+
+### 5️⃣ Re-send request to admin panel
+
+GET /admin
+
+*Result:*
+- Admin panel loads successfully
+- No server-side authorization check
+
+---
+
+### 6️⃣ Perform admin action
+
+- Delete user: carlos
+
+✅ *Lab solved*
+
+---
+
+## 🔹 Evidence
+
+![Modifying admin value in cookie header](../images/access-control-lab3-solved.png)
+
+---
+
+## 🔹 Real-World Scenarios (100% Real & Common)
+
+### 🧩 Scenario 1: Admin Flag in Cookies (MOST COMMON)
+
+Examples:
+
+admin=true isAdmin=1 role=admin access=full
+
+*Impact:*
+- Admin panel access
+- User deletion
+- Full application takeover
+
+---
+
+### 🧩 Scenario 2: Role Stored in HTTP Headers
+
+X-Role: user
+
+Changed to:
+
+X-Role: admin
+
+*Impact:*
+- API-level privilege escalation
+
+---
+
+### 🧩 Scenario 3: Unsigned / Weakly Signed JWT Tokens
+
+JWT payload:
+
+"role": "user"
+
+Modified to:
+
+"role": "admin"
+
+*Impact:*
+- Full backend compromise
+
+---
+
+### 🧩 Scenario 4: Mobile Applications
+
+Roles stored in:
+
+- Request body
+- Headers
+- Local storage
+
+*Impact:*
+- Backend takeover via intercepted mobile traffic
+
+---
+
+### 🧩 Scenario 5: Feature Flags / Subscription Abuse
+
+premium=false
+
+Changed to:
+
+premium=true
+
+*Impact:*
+- Paid features unlocked
+- Revenue loss
+
+---
+
+## 🔹 High-Value Endpoints to Always Test
+
+### 🔥 Admin / Privileged Paths
+```
+- /admin
+- /manage
+- /dashboard
+- /settings
+- /users
+- /delete
+- /api/admin
+- /api/users
+```
+
+### 🔍 Parameters to Always Modify
+
+admin role isAdmin access privilege userType plan subscription
+
+---
+
+## 🔹 Multi-Chain Attack Paths
+
+### 🔗 Chain 1
+
+- Cookie manipulation  
+→ Admin panel  
+→ Account takeover
+
+---
+
+### 🔗 Chain 2
+
+- Parameter-based access control  
+→ Admin API access  
+→ IDOR  
+→ Full database exposure
+
+---
+
+### 🔗 Chain 3
+
+- Admin access  
+→ File upload  
+→ Web shell  
+→ Server compromise
+
+---
+
+## 🔹 Remediation (Defender View)
+
+### ✅ Correct Fixes
+
+- Enforce authorization *server-side*
+- Determine role from *database / session*
+- Validate permissions on *every request*
+
+---
+
+### ❌ What Never Works
+
+- ❌ Trusting cookies
+- ❌ Client-side role checks
+- ❌ Hiding admin links
+- ❌ Security by obscurity
+
+UI ≠ Security
+
+---
+
+## 🔹 Extra Notes / Pro Tips
+
+- Editing cookies is basic testing, not hacking
+- If changing *one value* gives more power → vulnerability confirmed
+- Extremely common in bug bounty reports
+- Consistently ranked in *OWASP Top 10*
+
+---
+
+## 🧠 One-Line Memory Hook
+
+> If the browser decides your role, the attacker decides your role.
+
+
+---
+
 
 # Access Control – Lab 4: Horizontal Privilege Escalation (IDOR with GUIDs)
 
