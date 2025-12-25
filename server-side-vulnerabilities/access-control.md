@@ -1,49 +1,270 @@
-# Access Control – Lab 1: Unprotected Admin Functionality
+# Lab-1 🔐 Broken Access Control — Unprotected Functionality
 
 ---
 
 ## 🔹 Overview
-This lab highlights a *broken access control* vulnerability where an administrative function was exposed without any authorization checks. Instead of enforcing proper access control, the application simply hid the sensitive endpoint.
+
+Broken access control occurs when an application fails to correctly enforce *who is allowed to access what*.
+
+In this case, a *sensitive admin function exists but is completely unprotected*, meaning any user can access it directly by visiting the URL.
+
+This is a *high-impact, **real-world* vulnerability commonly found in production applications — not just labs.
 
 ---
 
-## 🔹 Methodology
+## 🔹 What Is This Topic?
 
-1. *Reconnaissance*
-   - Inspected /robots.txt file.
-   - Found a disallowed path: /administrator-panel.
+This topic focuses on *vertical access control failures*, where:
 
-2. *Exploitation*
-   - Navigated directly to /administrator-panel.
-   - Successfully accessed the admin interface without being an administrator.
+- A low-privileged user  
+- Gains access to high-privileged (admin) functionality  
+- Because the server *does not verify authorization*
 
-3. *Privilege Escalation*
-   - Executed an administrative action: deleted the user carlos.  
-   - This confirmed the lack of authorization controls.
+### Key point:
 
----
+> *Hiding functionality in the UI is NOT access control.*
 
-## 🔹 Proof of Exploit
-![Unprotected Admin Panel Exploit](../images/access-control-lab1.png)
-
-(Screenshot shows successful access to the admin panel and deletion of the carlos account.)
+Access control *must be enforced server-side*, not assumed.
 
 ---
 
-## 🔹 Security Impact
-- Unauthorized users could access administrative functionality.  
-- Potential consequences:
-  - Mass deletion of accounts.  
-  - Data manipulation.  
-  - Full system takeover.  
+## 🔹 Lab Walkthrough (Step-by-Step)
+
+### 1️⃣ Login as a normal user
+
+Username: wiener Password: peter
 
 ---
 
-## 🔹 Remediation
-- Enforce *server-side role-based access control (RBAC)*.  
-- Never expose sensitive endpoints in robots.txt.  
-- Implement authorization middleware to validate user roles.  
-- Monitor and log access attempts to restricted areas.  
+### 2️⃣ Observe application behavior
+
+- No admin panel link visible in UI  
+- Interface appears restricted  
+
+Next, manually check:
+
+/robots.txt
+
+---
+
+### 3️⃣ Information disclosure via robots.txt
+
+The file reveals a hidden path:
+
+Disallow: /administrator-panel
+
+This indicates the existence of an admin endpoint that developers attempted to hide.
+
+---
+
+### 4️⃣ Manual endpoint access
+
+Manually browse to:
+
+/administrator-panel
+
+---
+
+### 5️⃣ Authorization failure confirmed
+
+- Admin panel loads successfully  
+- HTTP response status: *200 OK*  
+- No authentication or role verification performed  
+
+➡ *Unprotected admin functionality confirmed*
+
+---
+
+### 6️⃣ Abuse admin functionality
+
+- Locate delete-user feature  
+- Delete the user:
+
+carlos
+
+---
+
+### 7️⃣ Lab solved ✅
+
+---
+
+## 🔹 Evidence
+
+### 📸 robots.txt Disclosure
+
+![robots.txt file](../images/robots-txt-disclosure.png)
+
+---
+
+### 📸 Direct Access to /administrator-panel (HTTP 200)
+
+![manually access admin url](../images/administrator-panel-200.png)
+
+---
+
+## 🔹 Real-World Scenarios (Comprehensive)
+
+### 🧩 Scenario 1: Hidden Admin Panels (Most Common)
+
+*Developer assumption*  
+Only admins know the URL
+
+*Attacker action*  
+Manually visits /admin
+
+*Result*  
+Full admin access
+
+---
+
+### 🧩 Scenario 2: Frontend-Only Restrictions
+
+*Expected*  
+Buttons hidden via JavaScript
+
+*Attacker*  
+Calls backend API directly
+
+*Result*  
+Unauthorized admin actions
+
+---
+
+### 🧩 Scenario 3: robots.txt Disclosure
+
+*Expected*  
+Sensitive paths hidden from bots
+
+*Attacker*  
+Reads /robots.txt
+
+*Result*  
+Admin endpoints exposed
+
+---
+
+### 🧩 Scenario 4: Guessable URLs
+
+Common targets:
+
+/admin /administrator /manage /control /dashboard /backend
+
+*Result*  
+Admin functionality exposed
+
+---
+
+### 🧩 Scenario 5: Mobile / API Admin Endpoints
+
+*Attacker*  
+Inspects API traffic
+
+*Result*  
+Direct admin API access
+
+---
+
+### 🧩 Scenario 6: Legacy / Forgotten Endpoints
+
+Examples:
+
+/admin_old /admin_backup /v1/admin
+
+*Result*  
+Legacy admin access
+
+---
+
+## 🔹 High-Value Endpoints to Always Test
+
+### 🔥 Admin Panels
+```
+/admin 
+/administrator 
+/manage 
+/control 
+/backend 
+/dashboard
+```
+
+### 🔥 APIs
+```
+/api/admin 
+/api/users 
+/api/roles 
+/api/deleteUser
+```
+
+### 🔥 Hidden / Info Files
+```
+/robots.txt 
+/.git/ 
+/.env 
+/config
+```
+
+---
+
+## 🔹 Multi-Chain Attacks (Real Impact)
+
+### 🔗 Chain 1: Access Control → Account Takeover
+
+Admin panel access  
+→ Reset passwords  
+→ Full account takeover
+
+---
+
+### 🔗 Chain 2: Access Control → Data Breach
+
+Admin access  
+→ Export users  
+→ Sensitive data leak
+
+---
+
+### 🔗 Chain 3: Access Control → RCE
+
+Admin access  
+→ File upload / config change  
+→ Remote code execution
+
+---
+
+## 🔹 Remediation (Defensive View)
+
+### ✅ Proper Fixes
+
+- Enforce server-side authorization
+- Verify role on *every request*
+- Implement RBAC / ABAC
+- Protect admin routes with middleware
+- Log unauthorized access attempts
+
+---
+
+### ❌ What Never Works
+
+- ❌ Hiding links in UI
+- ❌ Assuming users won’t guess URLs
+- ❌ Client-side role checks
+
+---
+
+## 🔹 Extra Notes / Tips (Attacker Mindset)
+
+- Always test direct URL access
+- UI ≠ Security
+- If login exists → access control bugs likely exist
+- Admin panels are high-value targets
+- Easy to find, high impact, bounty-friendly
+
+---
+
+## 🧠 One-Line Memory Hook
+
+> *If the server doesn’t check your role, you decide your role.*
+
 
 ---
 
