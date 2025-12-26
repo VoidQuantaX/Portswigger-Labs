@@ -757,6 +757,338 @@ UI ≠ Security
 
 ---
 
+# Lab-4 🔐 Parameter-Based Access Control – Role Manipulation (Vertical Privilege Escalation)
+
+---
+
+## 1️⃣ Overview
+
+Parameter-based access control vulnerabilities occur when an application *trusts user-controlled parameters* to decide authorization or role levels.
+
+Instead of validating permissions on the server, the backend *accepts role values sent by the client, leading to **vertical privilege escalation*.
+
+This is a *critical Broken Access Control* issue and is heavily exploited in real-world applications.
+
+---
+
+## 2️⃣ What Is This Topic?
+
+This vulnerability exists when:
+
+> *Authorization decisions are made using request parameters instead of server-side logic*
+
+Common parameters involved:
+
+- roleid
+- role
+- isAdmin
+- user_type
+- access_level
+- permissions
+
+📌 *Golden Rule*
+
+> Anything sent by the browser *cannot be trusted*.
+
+---
+
+## 3️⃣ Lab Walkthrough (Exact Exploitation Flow)
+
+### ✅ Step 1: Login as Normal User
+
+Credentials used:
+
+- *Username:* wiener  
+- *Password:* peter
+
+---
+
+### ✅ Step 2: Use a Normal Feature
+
+A legitimate feature was used:
+
+- *Update Email / Profile functionality*
+
+📌 Important:
+
+> Normal user features often leak authorization logic in responses.
+
+---
+
+### ✅ Step 3: Observe Server Response
+
+The API response returned the following JSON:
+
+```json
+{
+  "email": "test@test.com",
+  "roleid": 1
+}
+```
+
+## 🔍 Key observations:
+
+- roleid is exposed in the response
+- Backend understands role values
+- High chance backend also trusts this value in requests
+
+---
+
+### ✅ Step 4: Manipulate Role in Request
+
+The original POST request was copied and modified.
+
+Added / changed parameter:
+
+"roleid": 2
+
+This converts:
+
+1 → Normal User
+
+2 → Administrator
+
+---
+
+### ✅ Step 5: Send Modified POST Request
+
+The server accepted the modified role value.
+
+Response confirmed:
+
+{
+  "roleid": 2
+}
+
+🚨 Critical Confirmation
+
+> The backend trusts client-supplied role values.
+
+---
+
+### ✅ Step 6: Access Admin Panel
+
+Direct navigation to:
+
+/admin
+
+✔ Access granted without admin credentials.
+
+---
+
+### ✅ Step 7: Perform Admin Action
+
+- Deleted user carlos
+- Lab solved successfully ✅
+
+---
+
+## 🧾 Evidence
+
+---
+
+### 📸 Screenshot 1 — Role ID Disclosed in API Response
+
+The application exposes the user's `roleid` value in the JSON response of a normal user functionality.  
+This indicates that the backend relies on role-based logic tied to this parameter.
+
+![ Role ID Disclosed in API Response](../images/roleid_visible_in_response.png)
+
+---
+
+### 📸 Screenshot 2 — Role ID Manipulation via POST Request
+
+The exposed `roleid` value was copied into the POST request body and modified from a normal user role to an admin role (`roleid: 2`).  
+The server accepted this client-supplied value, resulting in administrative access.
+
+![Role ID Manipulation via POST Request](../images/roleid_modified_post_request.png)
+
+---
+
+## 5️⃣ Real-World Scenarios (Guaranteed & Complete)
+
+### 🔹 JSON / REST APIs (MOST COMMON)
+
+{
+  "roleid": 1,
+  "is_admin": false
+}
+
+➡ Change to:
+
+{
+  "roleid": 2
+}
+
+📌 Seen in:
+
+Web apps
+
+Mobile apps
+
+SPAs
+
+Internal APIs
+
+
+
+---
+
+### 🔹 Cookies
+
+role=1
+admin=false
+
+➡ Modify cookie → admin access
+
+
+---
+
+### 🔹 Hidden HTML Fields
+
+<input type="hidden" name="roleid" value="1">
+
+➡ Change before submission
+
+
+---
+
+### 🔹 Query Parameters
+
+/dashboard?roleid=1
+
+➡ Change to roleid=2
+
+
+---
+
+### 🔹 JWT Tokens (High Impact)
+```
+{
+  "sub": "wiener",
+  "roleid": 1
+}
+```
+➡ Exploitable if:
+
+- Weak signing key
+- Unsigned token
+- Algorithm confusion
+
+---
+
+### 🔹 Profile / Settings APIs
+
+Endpoints like:
+```
+/updateProfile
+/updateEmail
+/updateUser
+```
+
+Often leak or trust role fields.
+
+---
+
+### 6️⃣ High-Value Endpoints to Test
+
+🔍 User Endpoints
+```
+/me
+/profile
+/account
+/settings
+/api/user
+/api/profile
+```
+
+🔐 Admin Endpoints
+
+```
+/admin
+/manage
+/users
+/roles
+/permissions
+/deleteUser
+```
+
+---
+
+## 7️⃣ Multi-Chain Attack Paths
+
+### 🔗 Chain 1: Role Escalation → Account Takeover
+
+- Become admin
+- Reset user passwords
+- Take over accounts
+
+---
+
+### 🔗 Chain 2: Role Escalation → IDOR
+
+- Become admin
+- Access all user records
+- Extract PII and secrets
+
+---
+
+### Chain 3: Role Escalation → RCE
+
+- Admin upload/config access
+- Upload web shell
+- Server compromise
+- 
+---
+
+### 🔗 Chain 4: Role Escalation → Business Logic Abuse
+
+- Free purchases
+- Unlimited credits
+- Financial loss
+
+---
+
+## 8️⃣ Remediation (Correct Fix)
+
+❌ Never trust client-side parameters for authorization.
+
+✅ Proper Fix
+
+Store role server-side
+
+Validate permissions on every request
+
+Ignore role fields from client
+
+Implement RBAC / ABAC
+
+Remove role info from responses
+
+
+
+---
+
+## 9️⃣ Extra Notes / Attacker Tips
+
+If role appears in response → try sending it
+
+If role appears in request → try changing it
+
+UI checks ≠ security
+
+Client-side logic is not protection
+
+This bug is OWASP Top 10 – Broken Access Control
+
+
+
+---
+
+## 🧠 One-Line Takeaway
+
+> If the client can decide its role, the attacker will decide it for you.
+
 
 # Access Control – Lab 4: Horizontal Privilege Escalation (IDOR with GUIDs)
 
