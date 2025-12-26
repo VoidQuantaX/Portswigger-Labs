@@ -892,7 +892,7 @@ Direct navigation to:
 The application exposes the user's `roleid` value in the JSON response of a normal user functionality.  
 This indicates that the backend relies on role-based logic tied to this parameter.
 
-![ Role ID Disclosed in API Response](../images/roleid_visible_in_response.png)
+![ Role ID Disclosed in API Response](../images/roleid-visible-in-response.png)
 
 ---
 
@@ -901,7 +901,7 @@ This indicates that the backend relies on role-based logic tied to this paramete
 The exposed `roleid` value was copied into the POST request body and modified from a normal user role to an admin role (`roleid: 2`).  
 The server accepted this client-supplied value, resulting in administrative access.
 
-![Role ID Manipulation via POST Request](../images/roleid_modified_post_request.png)
+![Role ID Manipulation via POST Request](../images/roleid-modified-post-request.png)
 
 ---
 
