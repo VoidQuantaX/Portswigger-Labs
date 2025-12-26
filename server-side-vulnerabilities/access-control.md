@@ -1089,6 +1089,293 @@ This bug is OWASP Top 10 – Broken Access Control
 
 > If the client can decide its role, the attacker will decide it for you.
 
+---
+
+# Lab-5 🔐 Broken Access Control via Header-Based URL Override
+*(Platform / Proxy Misconfiguration)*
+
+---
+
+## 📌 Overview
+
+This vulnerability occurs when access control is enforced by a **front-end component** (proxy, CDN, WAF, load balancer), but the **back-end application trusts user-controlled headers** such as `X-Original-URL` or `X-Rewrite-URL` to determine which endpoint should be processed.
+
+An attacker can override the intended route using these headers and bypass URL-based restrictions, gaining unauthorized access to **admin or internal endpoints**.
+
+This issue is caused by **infrastructure misconfiguration**, not application business logic.
+
+---
+
+## ❓ What Is This Topic?
+
+This is a **Broken Access Control** vulnerability caused by a **broken trust boundary** between front-end and back-end systems.
+
+### Core Idea
+
+> Front-end blocks the URL, backend trusts a header that rewrites it.
+
+Because the backend assumes these headers are set only by trusted internal systems, it does not re-validate authorization.
+
+### Commonly Abused Headers
+```
+- X-Original-URL
+- X-Rewrite-URL
+- X-Forwarded-URI
+- X-Forwarded-Path
+```
+These headers are meant for **internal routing**, but when accepted from external users, they enable **full access control bypass**.
+
+---
+
+## 🧪 Lab Walkthrough
+
+### 1️⃣ Test Direct Access
+
+Attempt to access the admin panel directly:
+```
+GET /admin HTTP/2
+```
+➡️ Access denied (403 / Forbidden)
+
+✔ Indicates access control enforced at the front-end layer.
+
+---
+
+### 2️⃣ Identify Front-End Blocking
+
+Indicators of proxy-level blocking:
+
+- Plain error page
+- No application branding
+- No session-specific messaging
+
+➡️ Strong sign that a proxy or gateway is blocking the request, not the backend application.
+
+---
+
+### 3️⃣ Confirm Header Processing by Backend
+
+Send the following request via Burp Repeater:
+```
+GET / HTTP/1.1  
+Host: vulnerable-site.com  
+X-Original-URL: /invalid  
+```
+➡️ Response: 404 Not Found
+
+✔ Confirms that the backend **reads and processes** the `X-Original-URL` header.
+
+---
+
+### 4️⃣ Access Admin Panel via Header Override
+
+Modify the request:
+```
+GET / HTTP/1.1  
+X-Original-URL: /admin  
+```
+➡️ Admin page loads successfully  
+🔥 Access control bypass confirmed
+
+---
+
+### 5️⃣ Perform Admin Action (Delete User)
+
+To delete user `carlos`, send:
+```
+GET /?username=carlos HTTP/1.1 
+Host: vulnerable-site.com  
+X-Original-URL: /admin/delete  
+```
+➡️ User deleted  
+✅ Lab solved
+
+---
+
+## 🧾 Evidence
+
+### 📸 Screenshot 1 — Access allowed on Admin Access through override header
+![Admin Access through override header](../images/admin-access-header.png)
+
+---
+
+### 📸 Screenshot 2 — Admin Action via Header-Based URL Override
+![Action via Header-Based URL Override](../images/admin-delete-header.png)
+
+## 🌍 Real-World Scenarios (Guaranteed in Production)
+
+### 1️⃣ Reverse Proxy Blocks `/admin`
+
+- Nginx denies `/admin`
+- Backend route still exists
+- Backend trusts `X-Original-URL`
+
+🔥 Result: Admin panel exposed
+
+---
+
+### 2️⃣ Load Balancer Rewriting URLs (AWS / Azure)
+
+- Load balancer adds rewrite headers
+- Backend trusts them blindly
+- Attacker supplies header directly
+
+🔥 Common in Spring Boot + ALB setups
+
+---
+
+### 3️⃣ API Gateway vs Microservice Mismatch
+
+- Gateway blocks `/admin`
+- Microservice still routes it
+- Header override bypasses gateway
+
+🔥 Seen in Kubernetes + API Gateway environments
+
+---
+
+### 4️⃣ Front-End URL Validation Only
+
+- JavaScript blocks admin links
+- Backend routing trusts headers
+
+🔥 UI security ≠ backend security
+
+---
+
+### 5️⃣ Legacy Java / .NET Framework Defaults
+
+- Framework supports rewrite headers by default
+- Developers unaware of behavior
+
+🔥 Extremely common in enterprise applications
+
+---
+
+### 6️⃣ Proxy Fails to Strip Headers
+
+- URL sanitized
+- Headers not sanitized
+
+🔥 Header becomes trusted attack vector
+
+---
+
+### 7️⃣ Internal Admin / Debug Endpoints
+
+- `/internal/admin`
+- Intended for internal access only
+- Exposed via rewrite headers
+
+🔥 High-impact internal access
+
+---
+
+### 8️⃣ CDN + Backend Trust Issues
+
+- CDN rewrites URLs
+- Backend trusts forwarded URI
+
+🔥 Multiple real-world CVEs exist
+
+---
+
+### 9️⃣ Multi-Proxy Trust Chain Failure
+
+- CDN → Load Balancer → App
+- One layer strips headers, another doesn’t
+
+🔥 Attackers exploit weakest link
+
+---
+
+## 🎯 High-Value Endpoints to Test
+
+Always test these with override headers:
+```
+- /admin
+- /admin/delete
+- /admin/users
+- /internal
+- /manage
+- /debug
+- /config
+- /actuator
+- /metrics
+- /api/admin/*
+```
+---
+
+## 🔗 Multi-Chain Attacks
+
+Header-based bypasses are often chained with other vulnerabilities.
+
+### Chain 1: Header Bypass → IDOR
+
+- Access admin panel
+- Modify user identifiers
+
+---
+
+### Chain 2: Header Bypass → RCE
+
+- Access debug / actuator endpoints
+- Trigger command execution
+
+---
+
+### Chain 3: Header Bypass → Account Takeover
+
+- Access admin password reset APIs
+- Take over user accounts
+
+---
+
+### Chain 4: Header Bypass → Data Breach
+
+- Access internal reports
+- Export sensitive data
+
+---
+
+### Chain 5: Header Bypass → Privilege Escalation
+
+- Modify roles or permissions
+- Create persistent admin access
+
+---
+
+## 🛡️ Remediation
+
+### ✅ Correct Fixes
+
+- Do NOT trust rewrite headers from external users
+- Strip routing headers at the edge:
+  - X-Original-URL
+  - X-Rewrite-URL
+- Enforce authorization checks **after routing**
+- Validate user roles on every request
+- Use allow-lists for internal headers
+- Apply defense at every layer
+
+---
+
+## 🧠 Extra Notes / Pro Tips
+
+- If `/admin` is blocked → always test headers
+- Plain error page usually means proxy
+- Fancy error page usually means backend
+- 404 after header injection confirms backend routing
+- Burp Repeater is mandatory for this vulnerability
+- This issue maps directly to **OWASP Top 10 – Broken Access Control**
+
+---
+
+## 🧩 One-Line Memory Rule
+
+> Frontend blocks URLs. Backend trusts headers.  
+> Headers = access control bypass.
+
 
 # Access Control – Lab 4: Horizontal Privilege Escalation (IDOR with GUIDs)
 
