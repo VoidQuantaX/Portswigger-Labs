@@ -1038,7 +1038,7 @@ Often leak or trust role fields.
 - Admin upload/config access
 - Upload web shell
 - Server compromise
-- 
+
 ---
 
 ### 🔗 Chain 4: Role Escalation → Business Logic Abuse
