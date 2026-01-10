@@ -2345,75 +2345,225 @@ data = fetchSensitiveData()
 
 ---
 
-# Access Control – Lab 5: Horizontal → Vertical Privilege Escalation
+# Lab-10 🔐 Broken Access Control – IDOR with Sensitive Data Exposure via Dynamic HTML
 
 ---
 
-## 🔹 Overview
-This lab demonstrates how a *horizontal privilege escalation (IDOR)* can be chained into a *vertical escalation* by exposing admin credentials or sensitive fields.  
-An attacker who can view another user’s page (via IDOR) may find admin-only data (e.g., a prefixed/hidden password) and then log in as the administrator to gain full control.
+## 📘 Overview
+
+This lab demonstrates a **critical Broken Access Control vulnerability** where a normal authenticated user can access another user’s account by modifying an `id` parameter in a GET request.
+
+Due to unsafe backend behavior, the server **dynamically renders HTML containing a prefilled password**, which allows an attacker to extract the **administrator’s password**, log in as admin, and perform privileged actions.
+
+This is a **high-impact vulnerability** combining:
+
+- IDOR (Insecure Direct Object Reference)
+- Sensitive data exposure
+- Vertical privilege escalation (User → Admin)
+- Unsafe dynamic HTML rendering
 
 ---
 
-## 🔹 Vulnerability
-The application identifies resources using a client-controllable parameter, for example:/my-account?id=wiener
-By substituting another user’s identifier (e.g., id=administrator), the application returns that user’s page. If that page contains *sensitive data* (hidden fields, prefilled passwords, tokens), an attacker can extract those values and *assume the higher-privilege identity*.
+## 📌 What Is This Topic?
+
+This vulnerability represents **IDOR combined with sensitive data leakage** through dynamically generated HTML.
+
+Key concepts involved:
+
+- Horizontal privilege escalation (user → another user)
+- Vertical privilege escalation (user → admin)
+- Trusting user-controlled identifiers
+- Rendering secrets inside HTML responses
+- Broken server-side authorization
+
+Core mistake:
+
+> The backend fetches and renders sensitive data **before verifying ownership**.
 
 ---
 
-## 🔹 Methodology / Lab Walkthrough
+## 🧪 Lab Walkthrough
 
-1. *Initial Access (Recon)*  
-   - Logged in as a normal user: wiener / peter.  
-   - Navigated to *My Account* and observed the account request:  
-     
-     GET /my-account?id=wiener
-     
+### 🎯 Goal
 
-2. *Horizontal IDOR*  
-   - Captured the request in Burp Suite Proxy and replaced the id parameter with administrator:  
-     
-     GET /my-account?id=administrator
-     
-   - The server returned the administrator’s account page.
-
-3. *Discovery of Sensitive Data*  
-   - Inspected the returned HTML source and found the admin password present in a hidden/prefilled field.
-
-4. *Vertical Escalation (Account Takeover)*  
-   - Copied the administrator password from the source.  
-   - Logged out and re-authenticated as:  
-     
-     Username: administrator
-     Password: <retrieved-password>
-     
-   - Successfully logged in as the administrator.
-
-5. *Impactful Action (Proof of Compromise)*  
-   - Accessed the Admin Panel and performed an administrative action: *deleted user carlos*.  
-   - Lab solved ✅
+Obtain the **administrator password** and use it to perform admin-level actions.
 
 ---
 
-## 🔹 Proof of Exploit
-![Retrieved admin password in page source](../images/access-control-lab5-password.png)  
-(Screenshot showing the admin page HTML source with the prefilled/hidden password field.)
+### ✅ Steps
 
-![Logged in as administrator / Admin panel action](../images/access-control-lab5-solved.png)  
-(Screenshot showing successful admin login and deletion of carlos.)
+#### 1️⃣ Login as a normal user
 
----
+Credentials:
 
-## 🔹 Security Impact
-- Exposing sensitive fields (passwords, tokens) in user-accessible pages allows attackers to *escalate privileges* from normal users to administrators.  
-- Consequences include complete application compromise, data loss, and unauthorized destructive actions.
+- wiener : peter
 
 ---
 
-## 🔹 Remediation
-- *Never* expose secrets in HTML (hidden fields, prefilled inputs, client-side JS).  
-- Enforce *server-side authorization* for every resource and action: resource.owner == session.user.  
-- Remove any sensitive values from client responses. Issue secrets only through secure, server-controlled channels.  
-- Monitor and log suspicious cross-account access attempts.
+#### 2️⃣ Visit your account page
+
+Example request:
+
+- GET /my-account?id=wiener
 
 ---
+
+#### 3️⃣ Modify the `id` parameter
+
+Change it to:
+
+- GET /my-account?id=administrator
+
+---
+
+#### 4️⃣ Observe backend behavior
+
+- No ownership check is performed
+- Backend fetches administrator data
+- HTML is dynamically rendered
+- Password field is **prefilled**
+
+---
+
+#### 5️⃣ Extract administrator password
+
+- Visible in response body
+- Visible in page source / Burp response
+
+---
+
+#### 6️⃣ Login as administrator
+
+- Use extracted password
+
+---
+
+#### 7️⃣ Perform admin action
+
+- Delete user `carlos`
+
+✅ Lab solved
+
+---
+
+## 🧾 Evidence
+
+### 📸 Prefilled Admin Password in Dynamic HTML
+
+![](../images/access-control-lab5-password.png)
+
+---
+
+## 🌍 Real-World Scenarios
+
+This exact vulnerability appears in:
+
+- Legacy web applications
+- Poorly designed account management systems
+- Internal admin dashboards
+- CMS platforms
+- University portals
+- Banking and HR systems
+
+Common developer mistakes:
+
+- Prefilling passwords for “convenience”
+- Assuming users won’t change IDs
+- Relying on frontend restrictions
+- Treating IDs as authorization
+
+Impact:
+
+- Admin account takeover
+- Full system compromise
+- Data breaches
+- Compliance violations (GDPR, PCI-DSS)
+
+---
+
+## 🎯 High-Value Endpoints to Test
+
+Always test ID-based endpoints returning HTML:
+
+- /my-account?id=
+- /profile?id=
+- /user/settings?id=
+- /account/details?id=
+- /admin/users?id=
+- /manageUser?id=
+
+Red flags:
+
+- HTML responses
+- Forms with sensitive fields
+- No ownership validation
+
+---
+
+## 🔗 Multi-Chain Attacks
+
+This lab demonstrates a classic attack chain:
+
+1. **IDOR**
+   - Access administrator account
+
+2. **Sensitive Data Exposure**
+   - Password embedded in HTML
+
+3. **Vertical Privilege Escalation**
+   - Login as administrator
+
+4. **Administrative Actions**
+   - User deletion
+   - Role modification
+   - System takeover
+
+In real applications, this chain can extend to:
+
+- Token theft
+- Password reuse across services
+- Database compromise
+- Infrastructure access
+
+---
+
+## 🛡️ Remediation
+
+### ✅ Mandatory Fixes
+
+- Enforce server-side access control
+- Verify ownership for every request
+- Never trust user-controlled IDs
+- Never render passwords in HTML
+- Store passwords as strong hashes
+
+---
+
+### ✅ Secure Design Pattern
+
+Correct approach:
+
+- Password: ********
+- [Change Password]
+
+Never:
+
+- Prefill passwords
+- Send credentials in responses
+- Rely on frontend logic
+
+---
+
+## 🧠 Extra Notes / Tips
+
+- `type="password"` only hides characters visually
+- Masking ≠ security
+- Dynamic HTML leaks are real leaks
+- If changing an ID changes access → vulnerability exists
+- IDOR + sensitive fields = **critical severity**
+
+---
+
+## 🧾 One-Line Summary
+
+> If changing an ID parameter exposes another user’s prefilled password, the application is critically broken.
