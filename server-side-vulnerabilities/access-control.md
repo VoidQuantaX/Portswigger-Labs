@@ -1866,53 +1866,240 @@ Backend normalizes
 
 ---
 
-# Access Control – Lab 4: Horizontal Privilege Escalation (IDOR with GUIDs)
+# Lab-8 🔐 Broken Access Control – Horizontal Privilege Escalation (IDOR with GUIDs)
 
 ---
 
-## 🔹 Overview
-This lab demonstrates an *Insecure Direct Object Reference (IDOR)* / horizontal privilege escalation where a normal user can access another user’s data by substituting identifiers (GUIDs) in requests. Even seemingly random GUIDs can be discovered elsewhere in the app (profiles, comments, links), allowing attackers to view or act on other users’ accounts.
+## 🔍 Overview
+
+This vulnerability occurs when an application uses non‑predictable identifiers (GUIDs / UUIDs) for users or objects but **fails to enforce ownership checks** on the backend.
+
+Developers often assume:
+
+> “We use GUIDs, so attackers can’t guess IDs.”
+
+This is **false security**.
+
+If GUIDs are leaked anywhere in the application, **authorization completely breaks**.
 
 ---
 
-## 🔹 Methodology
+## 📘 What Is This Topic?
 
-1. *Reconnaissance*
-   - Logged in as wiener:peter.  
-   - Navigated to *My Account* and observed an account request containing my GUID (id=<my_GUID>).
+This is **Horizontal Privilege Escalation via IDOR**, where:
 
-2. *Discovery of Target GUID*
-   - Browsed public pages (e.g., blog posts, comments) and found *Carlos’ GUID* exposed in a link or request.
+- Users are identified by GUIDs instead of numbers  
+- The application trusts **user‑supplied identifiers**
+- Backend does **NOT verify resource ownership**
 
-3. *Tampering the Request*
-   - Captured the /my-account?id=<my_GUID> request in Burp Proxy.  
-   - Replaced my GUID with Carlos’ GUID and resent the request.
+### Key misunderstanding by developers
 
-4. *Exploitation*
-   - The server returned Carlos’ account page data (API key, profile).  
-   - Submitted Carlos’ API key to the lab to complete the challenge.  
-   - Lab solved ✅
+- GUIDs = authorization ❌  
+- GUIDs = identification only ✅  
+
+If the server does not check **who owns the GUID**, any user can access any resource.
 
 ---
 
-## 🔹 Proof of Exploit
-![Access to another user's account via GUID IDOR](../images/access-control-lab4-solved.png)  
-(Screenshot showing Carlos’ account page / API key returned after substituting GUID.)
+## 🧪 Lab Walkthrough (What I Did)
+
+### 🎯 Goal
+Access **Carlos’s account data** by replacing my GUID with Carlos’s GUID.
+
+### ✅ Steps
+
+1. Login as a normal user  
+   - Username: `wiener`  
+   - Password: `peter`
+
+2. Browse the application and locate **Carlos’s blog post**
+
+3. Click on **Carlos’s profile**
+
+4. Intercept the request in Burp  
+   Example request observed:
+
+   - `/user?id=8f7d3c2e-91a1-4c3b-bf5e-XXXXXXXX`
+
+5. Copy **Carlos’s GUID**
+
+6. Navigate to my own account page:
+
+   - `/my-account?id=<my-guid>`
+
+7. Replace **my GUID** with **Carlos’s GUID**
+
+8. Send the request again
+
+9. Carlos’s sensitive data (API key) is returned  
+   → **Lab solved ✅**
 
 ---
 
-## 🔹 Security Impact
-- Attackers can *read sensitive user data* (API keys, emails, personal info).  
-- Attackers can *modify or delete other users' data* if write actions are exposed.  
-- Compromise ranges from privacy breach to full account takeover and downstream escalation (API abuse, pivoting).
+## ❓ Why This Worked
+
+- Backend trusted the `id` parameter
+- No authorization check like:
+
+  - “Does this session own this GUID?”
+
+- Backend assumed GUID secrecy = security
+
+This is **classic IDOR logic failure**.
 
 ---
 
-## 🔹 Remediation
-- Enforce *server-side object-level authorization*: always verify resource.owner == session.user.  
-- Do not trust client-supplied IDs for authorization decisions.  
-- Avoid exposing internal identifiers where possible; if required, validate ownership on every access.  
-- Implement logging/alerts for suspicious cross-user access patterns.
+## 🧾 Evidence
+
+### 📸 Screenshot — GUID Manipulation
+
+- Intercepted request containing user GUID
+- Replaced `wiener` GUID with `carlos` GUID
+- Server returned Carlos’s private data
+
+![GUID Manipulation](../images/guid-access-control-bypass.png)
+
+---
+
+---
+
+## 🌍 Real‑World Scenarios (Very Common)
+
+### 🔹 Where GUIDs Leak in Real Applications
+
+GUIDs are exposed through:
+
+- User profile pages
+- Blog author links
+- Comments & reviews
+- Chat messages
+- Activity feeds
+- Order history
+- Support tickets
+- API responses
+- JavaScript variables
+- Mobile app API traffic
+- WebSocket messages
+- GraphQL responses
+
+Once leaked → **IDOR becomes trivial**
+
+---
+
+## 🎯 High‑Value Endpoints to Always Test
+
+### 👤 User & Identity
+
+- `/user?id=<GUID>`
+- `/profile/<GUID>`
+- `/account/<GUID>`
+- `/api/users/<GUID>`
+- `/settings?user=<GUID>`
+
+### 🔐 Secrets & Tokens
+
+- `/api-keys?userId=<GUID>`
+- `/tokens/<GUID>`
+- `/oauth/clients/<GUID>`
+
+### 💳 Financial
+
+- `/invoices/<GUID>`
+- `/transactions/<GUID>`
+- `/wallets/<GUID>`
+
+### 📁 Files & Data
+
+- `/documents/<GUID>`
+- `/files/<GUID>`
+- `/exports/<GUID>`
+
+### 🛠️ Admin / Internal
+
+- `/admin/users/<GUID>`
+- `/internal/accounts/<GUID>`
+- `/support/tickets/<GUID>`
+
+---
+
+## 🔗 Multi‑Chain Attacks (Real Impact)
+
+### 🔥 Chain 1: IDOR → Account Takeover
+- Leak GUID  
+- Access account  
+- Reset email/password  
+- Take over account  
+
+### 🔥 Chain 2: IDOR → API Key Theft → Admin API
+- Access API key  
+- Call admin APIs directly  
+- Bypass UI restrictions  
+
+### 🔥 Chain 3: IDOR → Financial Fraud
+- Access invoices / wallets  
+- Modify payout details  
+- Steal funds  
+
+### 🔥 Chain 4: IDOR → Vertical Escalation
+- Discover admin GUID  
+- Access admin endpoints  
+- Promote own account  
+
+### 🔥 Chain 5: IDOR + Other Bypasses
+- Combine with:
+  - Method manipulation
+  - URL interpretation mismatch
+  - Header-based bypass
+
+→ **Full system compromise**
+
+---
+
+## 🛡️ Remediation (Correct Fixes)
+
+### ✅ Enforce Object Ownership
+- Every request must verify:
+  - Does this session own this GUID?
+
+### ✅ Server‑Side Authorization
+- Tie resources to session identity
+- Ignore user‑supplied identifiers where possible
+
+### ✅ Avoid GUID Leakage
+- Do not expose internal IDs in:
+  - URLs
+  - APIs
+  - Frontend code
+
+### ✅ Use Indirect References
+- Map public IDs → internal IDs server‑side
+
+---
+
+## 🧠 Extra Notes / Pentester Mindset
+
+### 🔑 Golden Rule
+> “If I can see an ID, I must try changing it.”
+
+### 🧪 Testing Checklist
+- Replace GUIDs everywhere
+- Compare responses carefully
+- Test in:
+  - URLs
+  - JSON bodies
+  - Cookies
+  - Headers
+  - WebSockets
+  - GraphQL
+
+### 📌 Exam / Interview Line
+> “GUIDs prevent guessing, not authorization bypass.”
+
+---
+
+## ✅ Final One‑Line Summary
+
+> Using GUIDs instead of numbers does **NOT** prevent IDOR — if ownership is not checked, horizontal privilege escalation is inevitable.
 
 ---
 
