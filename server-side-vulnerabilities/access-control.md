@@ -2103,6 +2103,248 @@ Once leaked → **IDOR becomes trivial**
 
 ---
 
+# Lab-9 🔐 Broken Access Control – Sensitive Data Leaked in Redirect Responses
+
+---
+
+## 🔍 Overview
+
+This vulnerability occurs when an application detects unauthorized access and issues an HTTP redirect (301/302), but *still includes sensitive data in the response body*.
+
+Attackers do not rely on browser behavior.  
+They inspect *raw HTTP responses* using tools like Burp Suite or curl.
+
+> Redirect ≠ Security  
+> Data exposure depends on server behavior, not client navigation.
+
+If sensitive information is generated before authorization checks are fully enforced, access control is already broken.
+
+---
+
+## 📘 What Is This Topic?
+
+This issue is a combination of:
+
+- Broken Access Control
+- Information Disclosure
+
+### Insecure Logic Pattern
+
+1. User requests a restricted resource
+2. Server detects unauthorized access
+3. Server issues a redirect to /login
+4. *Sensitive data is already present in the response body*
+
+Browsers automatically follow redirects and hide response bodies.  
+Security tools expose everything.
+
+---
+
+## 🧪 Lab Walkthrough (What Was Done)
+
+### 🎯 Goal
+
+Extract sensitive data from another user’s account by inspecting a redirect response.
+
+### ✅ Steps
+
+1. Login as a normal user
+
+wiener : peter
+
+2. Send a request targeting another user
+
+GET /my-account?id=carlos
+
+3. Observe the HTTP response
+
+HTTP/1.1 302 Found Location: /login
+
+4. Do NOT stop at the redirect
+
+5. Inspect the response body using Burp Suite
+
+6. Sensitive data (GUID / API Key) is visible in the body
+
+7. Submit the extracted value
+
+→ Lab solved ✅
+
+---
+
+## 🧾 Evidence
+
+### 📸 Screenshot – GUID Found in Redirect Response Body
+
+![GUID Found in Redirect Response Body](../images/redirect-response-guid-leak.png)
+
+---
+
+## 🧠 Why This Worked
+
+- Authorization was checked *after* sensitive data was generated
+- Redirect only affected browser navigation
+- Server still returned confidential content
+- No ownership validation before data exposure
+
+---
+
+## 🌍 Real-World Scenarios
+
+### 🔹 Common Developer Mistake
+
+data = fetchUserSensitiveData(targetUser)
+
+if not authorized: redirect("/login")
+
+return response(data)
+
+❌ Redirect occurs  
+❌ Sensitive data already leaked  
+
+---
+
+### 🔹 Where This Happens in Production
+
+#### 👤 User & Identity Pages
+- Profile pages
+- Account dashboards
+- API key sections
+
+#### 🔐 Secrets & Credentials
+- API tokens
+- OAuth secrets
+- Recovery keys
+
+#### 💳 Financial Systems
+- Invoices
+- Transactions
+- Wallet balances
+
+#### 🛠️ Admin / Internal Tools
+- Support tickets
+- Audit logs
+- Internal notes
+
+#### 📱 Mobile & API Backends
+- Redirects ignored
+- JSON still parsed by clients
+
+---
+
+## 🎯 High-Value Endpoints to Test
+
+### 👤 Account & Identity
+
+/my-account /profile /user /settings
+
+### 🔑 Secrets
+
+/api-key /tokens /secrets /credentials
+
+### 💳 Finance
+
+/billing /invoices /transactions
+
+### 🛠️ Admin / Internal
+
+/admin/users /support/ticket /internal/account
+
+### 📡 APIs
+
+/api/user /v1/account /v2/profile
+
+---
+
+## 🔗 Multi-Chain Attack Scenarios
+
+### 🔥 Chain 1 – Redirect Leak → Account Takeover
+
+1. Trigger redirect on victim resource
+2. Inspect response body
+3. Extract API key / token
+4. Authenticate as victim
+
+---
+
+### 🔥 Chain 2 – Redirect Leak → Vertical Privilege Escalation
+
+1. Leak admin token
+2. Access admin endpoints
+3. Modify roles
+4. Gain full control
+
+---
+
+### 🔥 Chain 3 – Redirect Leak + IDOR
+
+1. Change user identifier
+2. Trigger redirect
+3. Read leaked data
+4. Repeat across users
+
+---
+
+### 🔥 Chain 4 – Redirect Leak → Financial Fraud
+
+1. Access invoice endpoint
+2. Receive redirect
+3. Read financial details
+4. Abuse refunds or payouts
+
+---
+
+### 🔥 Chain 5 – Redirect Leak + Automation
+
+1. Enumerate users
+2. Collect leaked secrets silently
+3. No alerts triggered
+
+---
+
+## 🛡️ Remediation
+
+### ✅ Perform Authorization First
+
+if not authorized: redirect("/login") return
+
+data = fetchSensitiveData()
+
+### ✅ Never Generate Data Before Authorization
+- No database queries
+- No API calls
+- No object loading
+
+### ✅ Strip Response Bodies on Redirects
+- Redirect responses must be empty
+
+### ✅ Enforce Server-Side Access Control
+- Never rely on frontend behavior
+
+### ✅ Test with Security Tools
+- Browsers hide response bodies
+- Burp and curl do not
+
+---
+
+## 🧠 Extra Notes
+
+### 🔑 Pentester Rule
+
+> Never trust a redirect — always inspect the response body.
+
+### 🧪 Testing Checklist
+
+- Expand all 301 / 302 responses
+- Compare response sizes
+- Look for:
+  - JSON
+  - HTML
+  - Tokens
+  - Hidden fields
+
+---
+
 # Access Control – Lab 5: Horizontal → Vertical Privilege Escalation
 
 ---
