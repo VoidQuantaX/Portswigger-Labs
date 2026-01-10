@@ -2567,3 +2567,227 @@ Never:
 ## 🧾 One-Line Summary
 
 > If changing an ID parameter exposes another user’s prefilled password, the application is critically broken.
+
+---
+
+# Lab-11 🔐 Broken Access Control – IDOR via Chat File Disclosure
+
+---
+
+## 📘 Overview
+
+This vulnerability demonstrates **Insecure Direct Object Reference (IDOR)**, a form of **Broken Access Control**, where an application allows direct access to internal chat files using user-controlled parameters without verifying ownership.
+
+As a result, an attacker can access **another user’s private chat**, extract **sensitive credentials**, and perform **account takeover**.
+
+---
+
+## 📌 What Is This Topic?
+
+**IDOR (Insecure Direct Object Reference)** occurs when:
+
+- Internal object references (IDs, filenames, numbers) are exposed
+- These references are fully user-controlled
+- The backend does **not** verify whether the requested object belongs to the authenticated user
+
+**Simple definition:**
+
+> If changing an ID or filename gives access to another user’s data, IDOR exists.
+
+In this lab:
+
+- Chat logs are stored as files (e.g., `1.txt`, `2.txt`)
+- The application checks **login status only**
+- **No ownership validation** is performed on chat files
+
+---
+
+## 🧪 Lab Walkthrough
+
+### 🎯 Goal
+
+Obtain **Carlos’s password** from his private chat and log in as him.
+
+---
+
+### ✅ Steps
+
+1. **Login as a normal user**
+
+   ```
+   wiener : peter
+   ```
+
+2. **Send a chat message**
+
+   - This generates a chat log file for your session  
+   - Example: `2.txt`
+
+3. **Download your own chat**
+
+   ```
+   /download-chat?file=2.txt
+   ```
+
+4. **Exploit IDOR**
+
+   - Modify the filename parameter:
+
+   ```
+   /download-chat?file=1.txt
+   ```
+
+5. **Read Carlos’s private chat**
+
+   - The chat belongs to Carlos
+   - The HelpLine message reveals his password
+
+6. **Login as Carlos using leaked password**
+
+   ✅ **Lab solved**
+
+---
+
+## 🧾 Evidence
+
+### 📸 Screenshot – Carlos Password Found in Chat File
+
+![Carlos Password Found in Chat File](../images/idor-chat-password-carlos.png)
+
+---
+
+## 🌍 Real-World Scenarios
+
+### 🔹 Chat & Support Systems
+
+- Chat transcripts stored as:
+  - `chat_1001.txt`
+  - `chat_1002.txt`
+- Users can access **other users’ private conversations**
+
+---
+
+### 🔹 Invoices & Billing
+
+- `/invoice?id=501`
+- `/invoice?id=502`
+
+➡️ Downloading invoices of other customers
+
+---
+
+### 🔹 Private Documents
+
+- `/uploads/user123.pdf`
+- `/uploads/user124.pdf`
+
+➡️ Medical records, IDs, resumes leaked
+
+---
+
+### 🔹 Messages & Tickets
+
+- `/support/ticket?id=300`
+
+➡️ Internal or admin communications exposed
+
+---
+
+### 🔹 APIs
+
+- `GET /api/users/45`
+
+➡️ Returns another user’s personal data
+
+---
+
+## 🎯 High-Value Endpoints to Test
+
+Always test IDOR on endpoints like:
+
+- `/download`
+- `/file`
+- `/export`
+- `/view`
+- `/invoice`
+- `/document`
+- `/profile`
+- `/my-account`
+- `/chat`
+- `/messages`
+- `/support`
+- `/api/user/{id}`
+
+**Rule:**
+
+> If you see numbers, filenames, or IDs — test IDOR immediately.
+
+---
+
+## 🔗 Multi-Chain Attacks
+
+IDOR is often just the **entry point**.
+
+### 🔥 Example Attack Chain
+
+1. **IDOR**
+   - Access Carlos’s chat file
+
+2. **Sensitive Data Exposure**
+   - Password leaked in chat
+
+3. **Account Takeover**
+   - Login as Carlos
+
+4. **Further Abuse**
+   - Reset emails
+   - Access internal features
+   - Pivot to admin if possible
+
+---
+
+## 🛡️ Remediation
+
+### ✅ Correct Fixes
+
+- Enforce **server-side authorization**
+- Validate **object ownership** on every request
+- Ensure:
+  - Does this file belong to this user?
+
+---
+
+### ❌ Incorrect Fixes
+
+- Hiding filenames
+- Using random numbers only
+- Frontend-only restrictions
+- Assuming users won’t tamper with URLs
+
+---
+
+## 🧠 Extra Notes / Tips
+
+- Logged-in ≠ authorized
+- Filenames and IDs are **not secrets**
+- UI labels like “You / HelpLine” can mislead
+- Always inspect **direct object access** in Burp
+- If changing a filename works → **access control is broken**
+
+---
+
+## 🎓 Exam / Viva One-Liner
+
+> IDOR occurs when an application allows access to internal objects using user-controlled references without verifying authorization.
+
+---
+
+## 🔑 Final Summary
+
+- IDOR is extremely common
+- Very easy to exploit
+- Very high impact
+- Frequently leads to account takeover
+- One missing ownership check can compromise the entire system
+
+---
