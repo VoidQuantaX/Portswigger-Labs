@@ -146,8 +146,14 @@ Admin endpoints exposed
 ### 🧩 Scenario 4: Guessable URLs
 
 Common targets:
-
-/admin /administrator /manage /control /dashboard /backend
+```
+/admin 
+/administrator 
+/manage 
+/control 
+/dashboard 
+/backend
+```
 
 *Result*  
 Admin functionality exposed
@@ -167,8 +173,11 @@ Direct admin API access
 ### 🧩 Scenario 6: Legacy / Forgotten Endpoints
 
 Examples:
-
-/admin_old /admin_backup /v1/admin
+```
+/admin_old 
+/admin_backup 
+/v1/admin
+```
 
 *Result*  
 Legacy admin access
@@ -1376,6 +1385,250 @@ Header-based bypasses are often chained with other vulnerabilities.
 > Frontend blocks URLs. Backend trusts headers.  
 > Headers = access control bypass.
 
+---
+
+# Lab-6 🔐 Method-Based Access Control Bypass
+## (Broken Access Control – HTTP Method Manipulation)
+
+---
+
+## 📌 Overview
+
+Method-based access control vulnerabilities occur when an application restricts sensitive functionality based on the **HTTP method** (`POST`, `GET`, `PUT`, etc.), but fails to enforce authorization consistently across *all* methods.
+
+Instead of validating **who** is allowed to perform an action at the business-logic level, the application assumes that restricting a specific HTTP method is sufficient.
+
+Attackers can manipulate or change HTTP methods to bypass access controls and perform unauthorized actions such as **privilege escalation**.
+
+---
+
+## ❓ What Is This Topic?
+
+This is a **Broken Access Control** vulnerability where:
+
+- Authorization checks are tied to:
+  - URL
+  - HTTP method
+
+- But the backend:
+  - Allows alternative methods
+  - Loosely validates method names
+  - Applies authorization checks only to specific methods (usually `POST`)
+
+### Core Problem
+
+> The application checks **WHO** can access an endpoint only for *some* HTTP methods — not all.
+
+---
+
+## 🧪 Lab Walkthrough (Step-by-Step)
+
+### Step 1: Log in as Administrator
+
+- Credentials:
+  - `administrator : admin`
+
+- Navigate to:
+  - `/admin`
+
+- Promote user **carlos** to admin
+- Send the promotion request to **Burp Repeater**
+
+---
+
+### Step 2: Log in as Normal User
+
+- Credentials:
+  - `wiener : peter`
+
+- Open **Incognito / Private Window**
+- Replace the session cookie in Burp Repeater with **wiener’s cookie**
+- Send the same request
+
+**Response:**
+- `Unauthorized`
+
+✔ Confirms method-based access control exists
+
+---
+
+### Step 3: Test HTTP Method Confusion
+
+- Change HTTP method:
+  - `POST` → `POSTX`
+
+**Response:**
+- `Missing parameter`
+
+🔥 Authorization check bypassed  
+Request now reaches backend logic
+
+---
+
+### Step 4: Switch to GET Method
+
+- In Burp:
+  - Right-click request
+  - Select **Change request method → GET**
+
+- Modify parameter:
+  - `username=wiener`
+
+- Send request
+
+**Result:**
+- User `wiener` promoted to admin  
+✅ Lab solved
+
+---
+
+## 🧾 Evidence
+
+### 📸 Screenshot 1 — Admin Sends POST Request (Valid Privileged Action)
+![Admin Sends POST Request](../images/admin-post-request-promote-user.png)
+
+---
+
+### 📸 Screenshot 2 — Normal User Sends Same POST Request (Unauthorized)
+![Normal User Sends Same POST Request](../images/wiener-post-request-unauthorized.png)
+
+---
+
+### 📸 Screenshot 3 — Method Changed to POSTX (Authorization Check Bypassed)
+![Method Changed to POSTX](../images/postx-method-bypass-missing-parameter.png)
+
+---
+
+### 📸 Screenshot 4 — Method Changed to GET (Privilege Escalation Successful)
+![Method Changed to GET](../images/get-method-success-user-promoted.png)
+
+---
+
+## 🌍 Real-World Scenarios (100% Guaranteed)
+
+### 1️⃣ POST Restricted, GET Allowed
+- POST requires admin
+- GET performs same action
+- Developer assumes “GET is safe”
+
+🔥 Extremely common mistake
+
+---
+
+### 2️⃣ Backend Accepts Non-Standard Methods
+- POST blocked
+- `PUT`, `PATCH`, `POSTX` allowed
+- Framework ignores unknown methods
+
+🔥 Seen in Java, PHP, Node.js apps
+
+---
+
+### 3️⃣ API Endpoints with Loose Method Validation
+- Authorization enforced only on POST
+- GET triggers same business logic
+
+🔥 Common in REST APIs
+
+---
+
+### 4️⃣ Mobile vs Web API Inconsistency
+- Mobile app uses POST
+- Backend also accepts GET
+
+🔥 Undocumented behavior abused by attackers
+
+---
+
+### 5️⃣ Legacy Endpoints
+- Old endpoints support GET
+- New security added only to POST
+
+🔥 Backward compatibility issues
+
+---
+
+### 6️⃣ Proxy / WAF Method Filtering Only
+- Proxy blocks POST
+- Backend allows GET
+
+🔥 Platform-layer mismatch
+
+---
+
+### 7️⃣ Framework Auto-Routing
+- Same function mapped to multiple methods
+- Auth decorator applied once
+
+🔥 Very common in MVC frameworks
+
+---
+
+### 8️⃣ CSRF Protection False Confidence
+- Dev relies on CSRF for POST
+- GET bypasses CSRF + auth
+
+🔥 Double failure
+
+---
+
+## 🎯 High-Value Endpoints to Test
+
+- `/admin/promote`
+- `/admin/delete`
+- `/admin/updateRole`
+- `/user/update`
+- `/api/admin/*`
+- `/manage/*`
+- `/settings`
+- `/internal/*`
+
+### Methods to Always Try
+
+- `GET`
+- `POST`
+- `PUT`
+- `PATCH`
+- `OPTIONS`
+- `POSTX`
+
+---
+
+## 🔗 Multi-Chain Attacks
+
+- Method Bypass → Privilege Escalation
+- Method Bypass → IDOR
+- Method Bypass → Account Takeover
+- Method Bypass → Admin Panel Access
+- Method Bypass → Business Logic Abuse
+
+---
+
+## 🛡️ Remediation
+
+### ✅ Proper Fixes
+
+- Enforce authorization **independent of HTTP method**
+- Apply checks at:
+  - Controller level
+  - Business logic level
+- Reject unknown HTTP methods
+- Use strict routing:
+  - One endpoint → one method
+- Apply deny-by-default
+- Log invalid method usage
+
+---
+
+## 🧠 Extra Notes
+
+- If POST is blocked → always try GET
+- If GET works → access control is broken
+- Non-standard methods are a goldmine
+- Burp “Change request method” is essential
+- OWASP Top 10 — Broken Access Control
+
+---
 
 # Access Control – Lab 4: Horizontal Privilege Escalation (IDOR with GUIDs)
 
