@@ -1630,6 +1630,242 @@ Request now reaches backend logic
 
 ---
 
+# Lab-7 🔐 Broken Access Control – Horizontal Privilege Escalation (IDOR)
+## + URL Interpretation Mismatch (Frontend vs Backend)
+
+---
+
+## 🔍 Overview
+
+Broken Access Control occurs when an application fails to properly restrict what authenticated users are allowed to access.
+
+In this lab, a **normal authenticated user** accessed **another user’s data (Carlos)** by modifying an identifier in the request.
+
+This is a **Horizontal Privilege Escalation (IDOR)** vulnerability.
+
+The same root cause also commonly appears alongside **URL interpretation mismatches** between frontend security layers and backend routing.
+
+Both issues originate from **trusting user-controlled input**.
+
+---
+
+## 📘 What Is This Topic?
+
+This topic combines two closely related access control failures:
+
+### 1️⃣ Horizontal Privilege Escalation (IDOR)
+
+- User accesses resources belonging to another user
+- Achieved by modifying identifiers such as:
+  - `id`
+  - `username`
+  - `userId`
+  - `accountId`
+
+### 2️⃣ URL Interpretation Mismatch
+
+- Frontend (proxy / WAF / gateway) and backend interpret URLs differently
+- Leads to bypass using:
+  - Case changes
+  - Trailing slashes
+  - File extensions
+  - Encoded paths
+
+> **Same core flaw:** authorization is inconsistent or missing.
+
+---
+
+## 🧪 Lab Walkthrough
+
+### 🎯 Goal
+
+Access **Carlos’s account data** while logged in as **Wiener**.
+
+---
+
+### ✅ Step-by-Step
+
+1. Log in as a normal user  
+   Credentials:
+   - `wiener : peter`
+
+2. Navigate to your account page  
+   Example request:
+   - `GET /my-account?id=wiener`
+
+3. Intercept the request in **Burp Suite**
+
+4. Modify the identifier:
+   - `id=wiener` → `id=carlos`
+
+5. Send the request again
+
+6. Carlos’s account data is returned  
+   → **Lab solved ✅**
+
+---
+
+## 🧠 Why This Worked
+
+- Backend trusted the `id` parameter
+- No authorization check like:
+  - *Does this session own this resource?*
+- Application assumed:
+  - Authenticated = Authorized (❌ wrong)
+
+---
+
+## 🧾 Evidence
+
+### 📸 Screenshot 1 — ID Parameter Manipulation (Horizontal Privilege Escalation)
+
+- Intercepted request to /my-account
+- Modified parameter:
+  - id=wiener → id=carlos
+- Response returned *Carlos’s account data*, confirming IDOR
+
+![Carlos’s account data](../images/idor-id-parameter-changed.png)
+
+---
+
+---
+
+## 🌍 Real-World Scenarios (100% Guaranteed)
+
+### 🔹 IDOR / Horizontal Privilege Escalation
+
+- `/profile?id=123`
+- `/invoice?invoiceId=8891`
+- `/download?fileId=42`
+- `/api/user/456`
+- `/orders/9876`
+
+Seen in:
+- Banking applications
+- Healthcare portals
+- SaaS dashboards
+- Government systems
+
+---
+
+## 🔹 Frontend vs Backend URL Interpretation Mismatch
+
+Often exists alongside IDOR.
+
+### 1️⃣ Case Sensitivity Bypass
+
+Frontend blocks:
+- `/admin/deleteUser`
+
+Attacker sends:
+- `/ADMIN/DELETEUSER`
+
+Frontend: ❌ Not blocked  
+Backend: ✅ Executes request
+
+---
+
+### 2️⃣ Trailing Slash Bypass
+
+Frontend blocks:
+- `/admin/deleteUser`
+
+Attacker uses:
+- `/admin/deleteUser/`
+
+---
+
+### 3️⃣ File Extension / Suffix Bypass
+
+Backend maps:
+- `/admin/deleteUser`
+- `/admin/deleteUser.json`
+
+Frontend blocks only:
+- `/admin/deleteUser`
+
+---
+
+### 4️⃣ Encoded Path Tricks
+
+- `/admin%2FdeleteUser`
+- `/admin/..;/deleteUser`
+
+Frontend misses  
+Backend normalizes
+
+---
+
+## 🎯 High-Value Endpoints to Test
+
+- `/my-account`
+- `/profile`
+- `/user`
+- `/api/users/{id}`
+- `/orders/{id}`
+- `/documents/{id}`
+- `/files/{id}`
+- `/admin/*`
+- `/internal/*`
+
+---
+
+## 🔗 Multi-Chain Attacks
+
+- IDOR → Steal sensitive data
+- IDOR → Extract API keys
+- IDOR → Access admin-only resources
+- IDOR + URL mismatch → Gateway bypass
+- Chain leads to **full account takeover**
+
+---
+
+## 🛡️ Remediation
+
+### ✅ Proper Fixes
+
+- Enforce object-level authorization:
+  - Verify resource ownership
+- Use **session identity**, not request parameters
+- Normalize URLs **before** security checks
+- Enforce consistency:
+  - Case
+  - Slashes
+  - Extensions
+
+### ❌ Never Trust
+
+- Client-side checks
+- Hidden fields
+- URL secrecy
+- Frontend-only restrictions
+
+---
+
+## 🧠 Extra Notes
+
+### 🔑 Memory Rule
+
+> If changing an ID changes the data you see → IDOR exists
+
+### 🔍 Testing Checklist
+
+- Change ID
+- Change username
+- Change case
+- Add `/`
+- Add `.json`
+- Encode path
+- Change HTTP method
+
+---
+
+## ✅ Final One-Line Summary
+
+> When backend trusts user-controlled identifiers or interprets URLs differently than the frontend, access control breaks — leading to IDOR, escalation, and full compromise.
+
+---
+
 # Access Control – Lab 4: Horizontal Privilege Escalation (IDOR with GUIDs)
 
 ---
