@@ -2791,3 +2791,264 @@ IDOR is often just the **entry point**.
 - One missing ownership check can compromise the entire system
 
 ---
+
+# Lab-12 🔐 Multi-Step Access Control Vulnerabilities (Broken Access Control)
+
+---
+
+## 1️⃣ Overview
+
+A **multi-step access control vulnerability** occurs when:
+
+- An application enforces authorization checks in **early steps**
+- But **fails to re-check authorization in later steps**
+- Allowing attackers to directly trigger sensitive actions
+
+This commonly results in:
+
+- Privilege escalation  
+- Unauthorized role changes  
+- Full admin takeover  
+
+> ⚠️ Very common in real-world admin workflows and enterprise applications.
+
+---
+
+## 2️⃣ What Is This Topic?
+
+**Simple definition:**
+
+> The website checks permissions in Step 1 and Step 2, but forgets to check them again in Step 3.
+
+### 🔑 Key Security Concept
+
+- HTTP requests are **stateless**
+- The server does **not remember** how a request was reached
+- **Every sensitive request must validate authorization again**
+
+If the **final confirmation endpoint** does not verify user role → **security breaks**
+
+---
+
+## 3️⃣ Lab Walkthrough (Step-by-Step)
+
+### 🎯 Lab Goal
+
+Promote **wiener** to admin by abusing a broken multi-step confirmation flow.
+
+---
+
+### 🔹 Step 1: Login as Admin (Recon Phase)
+
+Credentials:
+
+- `administrator : admin`
+
+Actions:
+
+- Go to **Admin Panel**
+- Start user promotion workflow
+- Promote user `carlos`
+- Complete all steps:
+  - Step 1: Select user to promote
+  - Step 2: Review the details
+  - Step 3: Confirmation (vulnerable part/no security check)
+
+---
+
+### 🔹 Step 2: Capture Final Confirmation Request
+
+The final step 3 request looks like:
+
+- Endpoint: `/admin/roles`
+- Method: `POST`
+- Parameters:
+  - `username=carlos`
+  - `role=upgrade`
+  - `confirmation=true`
+
+➡️ Send this request to **Burp Repeater**
+
+---
+
+### 🔹 Step 3: Login as Normal User
+
+Credentials:
+
+- `wiener : peter`
+
+Actions:
+
+- Copy **wiener’s session cookie**
+- Do NOT access admin panel
+
+---
+
+### 🔹 Step 4: Exploit the Vulnerability
+
+In **Burp Repeater**:
+
+- Replace **admin cookie** with **wiener cookie**
+- Modify parameter:
+
+- `username=carlos` → `username=wiener`
+
+Send the request.
+
+### 💥 Result
+
+- Backend does **not re-check authorization**
+- Final confirmation endpoint trusts the request
+- **wiener is promoted to admin**
+
+✅ **Lab solved**
+
+---
+
+## 🧾 Evidence
+
+### 📸 Screenshot – Promotion Successful Using Wiener Session Cookie
+
+![Promotion Successful Using Wiener Session Cookie](../images/multi-step-wiener-promoted-admin.png)
+
+---
+
+## 4️⃣ Real-World Scenarios (100% Guaranteed)
+
+---
+
+### 🔹 Scenario 1: Admin Role Changes
+
+- Step 1: Select user (protected)
+- Step 2: Review (protected)
+- Step 3: Confirm (❌ unprotected)
+
+➡️ Attacker replays Step 3 directly
+
+---
+
+### 🔹 Scenario 2: Banking Transfers
+
+- Enter amount (checked)
+- Review transfer (checked)
+- Final confirm endpoint (❌ missing auth)
+
+➡️ Unauthorized fund transfer
+
+---
+
+### 🔹 Scenario 3: Password Reset Flows
+
+- Request reset (checked)
+- OTP verification (checked)
+- Final reset endpoint (❌ not checked)
+
+➡️ Account takeover
+
+---
+
+### 🔹 Scenario 4: E-commerce Refund Approval
+
+- Refund review page protected
+- `/approveRefund` endpoint unprotected
+
+➡️ Free money
+
+---
+
+### 🔹 Scenario 5: HR / Internal Systems
+
+- Promotion workflow
+- Final “confirm promotion” endpoint trusts earlier steps
+
+➡️ Staff privilege escalation
+
+---
+
+## 5️⃣ High-Value Endpoints (Always Test These)
+
+🚨 **Multi-step vulnerability gold mines**:
+
+- `/confirm`
+- `/approve`
+- `/finalize`
+- `/submit`
+- `/complete`
+- `/apply`
+- `/execute`
+- `/roles`
+- `/permissions`
+- `/admin/action`
+
+> If an endpoint performs a **final irreversible action**, replay it with a **low-privileged session**
+
+---
+
+## 6️⃣ Multi-Chain Attacks (Very Important)
+
+Multi-step flaws often chain with other bugs:
+
+1️⃣ Multi-step bypass → admin access  
+2️⃣ Admin access → user management  
+3️⃣ IDOR → private data exposure  
+4️⃣ Data leak → passwords / API keys  
+5️⃣ Full system compromise  
+
+💥 One missing check → total takeover
+
+---
+
+## 7️⃣ Remediation (How to Fix Properly)
+
+### ✅ Correct Fix
+
+- Enforce **authorization checks on every step**
+- Especially the **final confirmation endpoint**
+
+Example (secure logic):
+
+- Verify user role
+- Reject non-admin requests
+
+---
+
+### ❌ Incorrect Fixes
+
+- Assuming users completed earlier steps
+- Relying on frontend workflows
+- Checking permissions only once
+
+---
+
+## 8️⃣ Extra Notes / Tips
+
+### 🔹 Golden Rule
+
+> Every HTTP request must be authorized independently.
+
+---
+
+### 🔹 Pentester Mindset
+
+If you see:
+
+- A wizard
+- A confirmation page
+- A “Yes / Confirm” button
+
+👉 That **final request is your real target**
+
+---
+
+### 🔹 Exam / Viva One-Liner
+
+> A multi-step access control vulnerability occurs when authorization checks are applied to some steps of a process but omitted from later steps, allowing attackers to bypass controls by directly accessing unprotected endpoints.
+
+---
+
+## 🧠 Final Summary
+
+- Multi-step flows are **not secure by default**
+- Final confirmation endpoints are often forgotten
+- Attackers replay final requests with weaker sessions
+- Leads directly to **privilege escalation**
