@@ -2092,15 +2092,6 @@ Once leaked → **IDOR becomes trivial**
   - WebSockets
   - GraphQL
 
-### 📌 Exam / Interview Line
-> “GUIDs prevent guessing, not authorization bypass.”
-
----
-
-## ✅ Final One‑Line Summary
-
-> Using GUIDs instead of numbers does **NOT** prevent IDOR — if ownership is not checked, horizontal privilege escalation is inevitable.
-
 ---
 
 # Lab-9 🔐 Broken Access Control – Sensitive Data Leaked in Redirect Responses
@@ -2554,22 +2545,6 @@ Never:
 
 ---
 
-## 🧠 Extra Notes / Tips
-
-- `type="password"` only hides characters visually
-- Masking ≠ security
-- Dynamic HTML leaks are real leaks
-- If changing an ID changes access → vulnerability exists
-- IDOR + sensitive fields = **critical severity**
-
----
-
-## 🧾 One-Line Summary
-
-> If changing an ID parameter exposes another user’s prefilled password, the application is critically broken.
-
----
-
 # Lab-11 🔐 Broken Access Control – IDOR via Chat File Disclosure
 
 ---
@@ -2763,32 +2738,6 @@ IDOR is often just the **entry point**.
 - Using random numbers only
 - Frontend-only restrictions
 - Assuming users won’t tamper with URLs
-
----
-
-## 🧠 Extra Notes / Tips
-
-- Logged-in ≠ authorized
-- Filenames and IDs are **not secrets**
-- UI labels like “You / HelpLine” can mislead
-- Always inspect **direct object access** in Burp
-- If changing a filename works → **access control is broken**
-
----
-
-## 🎓 Exam / Viva One-Liner
-
-> IDOR occurs when an application allows access to internal objects using user-controlled references without verifying authorization.
-
----
-
-## 🔑 Final Summary
-
-- IDOR is extremely common
-- Very easy to exploit
-- Very high impact
-- Frequently leads to account takeover
-- One missing ownership check can compromise the entire system
 
 ---
 
@@ -3020,35 +2969,177 @@ Example (secure logic):
 
 ---
 
-## 8️⃣ Extra Notes / Tips
-
-### 🔹 Golden Rule
-
-> Every HTTP request must be authorized independently.
+# Lab-13 🛡️ Referer-Based Access Control Bypass (Broken Access Control)
 
 ---
 
-### 🔹 Pentester Mindset
+## 1️⃣ 🔍 Overview
 
-If you see:
+This lab demonstrates a **Referer-Based Access Control vulnerability**, where the
+application relies on the **HTTP Referer header** to authorize sensitive admin
+actions instead of validating the **actual user role** on the server side.
 
-- A wizard
-- A confirmation page
-- A “Yes / Confirm” button
+Because the Referer header is **fully attacker-controlled**, a low-privileged
+user can perform admin-only actions by forging or reusing an admin Referer.
 
-👉 That **final request is your real target**
-
----
-
-### 🔹 Exam / Viva One-Liner
-
-> A multi-step access control vulnerability occurs when authorization checks are applied to some steps of a process but omitted from later steps, allowing attackers to bypass controls by directly accessing unprotected endpoints.
+This results in **Broken Access Control** and **Privilege Escalation**.
 
 ---
 
-## 🧠 Final Summary
+## 2️⃣ 📌 What Is This Topic?
 
-- Multi-step flows are **not secure by default**
-- Final confirmation endpoints are often forgotten
-- Attackers replay final requests with weaker sessions
-- Leads directly to **privilege escalation**
+### Simple definition
+
+> Referer-based access control is broken when a website trusts the Referer
+> header instead of verifying permissions server-side.
+
+### Developer assumption (❌ WRONG)
+
+> “If the request comes from /admin, the user must be admin.”
+
+### Reality (💥)
+
+- Referer header is client-controlled
+- Attackers can forge it freely
+- Authorization must **never** rely on Referer
+
+---
+
+## 3️⃣ 🧪 Lab Walkthrough (Exact Solve Method)
+
+### 🎯 Goal
+
+Promote a **normal user (wiener)** to admin using flawed Referer-based authorization.
+
+---
+
+### 🔹 Step 1: Observe Admin Behavior
+
+Login as administrator:
+
+administrator : admin
+
+Perform a role change action and intercept the request in Burp Suite.
+
+Observed request:
+
+POST /admin/roles HTTP/1.1  
+Referer: http://vulnerable-site.com/admin  
+Cookie: admin-session  
+
+username=carlos&role=upgrade
+
+---
+
+### 🔹 Step 2: Identify the Flaw
+
+Server validates:
+
+- ✔️ Referer contains `/admin`
+
+Server does NOT validate:
+
+- ❌ User role
+- ❌ Admin permissions
+
+This confirms **Referer-based access control**.
+
+---
+
+### 🔹 Step 3: Exploit as Normal User
+
+Login as:
+
+wiener : peter
+
+In Burp Repeater:
+
+- Replace admin session cookie with **wiener’s session**
+- Change username from `carlos` to `wiener`
+- Keep the Referer header unchanged
+
+Modified request:
+
+POST /admin/roles HTTP/1.1  
+Referer: http://vulnerable-site.com/admin  
+Cookie: wiener-session  
+
+username=wiener&role=upgrade
+
+---
+
+### 🔹 Step 4: Send Request
+
+- Request accepted
+- User **wiener** promoted to admin
+- ✅ Lab solved
+
+---
+
+## 📸 Screenshot Evidence (1 SS)
+
+- Single screenshot taken
+- Shows:
+  - Admin endpoint accessed
+  - Wiener session cookie in use
+  - Referer still pointing to `/admin`
+- Confirms privilege escalation due to missing authorization checks
+
+![Promotion Successful Using referer header](../images/referer-wiener-promoted-admin.png)
+
+---
+
+## 4️⃣ 🌍 Real-World Scenarios
+
+- Admin panels protected by UI navigation only
+- Legacy PHP / Java apps trusting headers
+- Internal dashboards without role checks
+- APIs secured only by frontend logic
+
+---
+
+## 5️⃣ 🎯 High-Value Endpoints
+
+Always test:
+```
+/admin  
+/admin/roles  
+/admin/promote  
+/admin/delete  
+/admin/approve  
+/confirm  
+/execute  
+```
+If access depends on Referer → vulnerability exists.
+
+---
+
+## 6️⃣ 🔗 Multi-Chain Attacks
+
+1️⃣ Referer bypass → admin access  
+2️⃣ Admin panel access  
+3️⃣ IDOR exploitation  
+4️⃣ Sensitive data exposure  
+5️⃣ Full system compromise  
+
+---
+
+## 7️⃣ 🛡️ Remediation
+
+### Correct Fix
+
+- Enforce server-side authorization
+- Verify user role on **every request**
+
+Example:
+
+if user.role != "admin":
+    deny request
+
+### Incorrect Fixes
+
+- Checking Referer header
+- Relying on frontend navigation
+- JavaScript-only controls
+
+---
