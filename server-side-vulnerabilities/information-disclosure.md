@@ -267,7 +267,7 @@ SECRET_KEY=xxxxxxxx
 - Developer HTML comment discovered in page source
 - Comment revealed a hidden internal endpoint
 
-[HTML comment exposing hidden endpoint](../images/html-comment-info-leak.png)
+![HTML comment exposing hidden endpoint](../images/html-comment-info-leak.png)
 
 ---
 
@@ -277,7 +277,7 @@ SECRET_KEY=xxxxxxxx
 - Debug page loaded successfully
 - Sensitive information disclosed in response
 
-[Debug endpoint revealing secret key](../images/debug-endpoint-info-leak.png)
+![Debug endpoint revealing secret key](../images/debug-endpoint-info-leak.png)
 
 ---
 
