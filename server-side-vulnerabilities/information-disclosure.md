@@ -186,3 +186,282 @@ Endpoints where verbose errors are most useful:
 - Assuming attackers won’t inspect errors  
 
 ---
+
+# Lab-2 🐞 Information Disclosure – Debug Pages & Debugging Data
+*(HTML Comment → Debug Endpoint → Secret Key Disclosure)*
+
+---
+
+## 🔍 Overview
+
+Debug-related information disclosure occurs when an application exposes debug pages,
+diagnostic scripts, or development data to end users.
+
+These disclosures often reveal critical secrets such as:
+
+- Environment variables
+- Application secret keys
+- Internal file paths
+- Backend framework versions (Apache, PHP, etc.)
+
+Unlike minor leaks, debug disclosures frequently lead to immediate full compromise
+of the application.
+
+This vulnerability is extremely common in real-world breaches,
+especially in misconfigured production servers.
+
+---
+
+## 📌 What Is This Topic?
+
+This is an **Information Disclosure** vulnerability caused by development or debugging
+features left enabled in production.
+
+Core mistake:
+
+> Debug functionality is accessible outside the trusted developer environment.
+
+Attackers do not guess passwords — they read what the server tells them.
+
+---
+
+## 🧪 Lab Walkthrough
+
+### 🎯 Goal
+
+Extract a secret key exposed through a debug endpoint.
+
+### Steps
+
+1. Load the application homepage  
+2. View page source (HTML)
+
+3. Identify a developer HTML comment revealing a hidden endpoint:
+
+<!-- Debug endpoint: /cgi-bin/phpinfo.php -->
+
+4. Manually access the endpoint:
+
+GET /cgi-bin/phpinfo.php
+
+5. Server responds with a phpinfo() debug page
+
+6. Debug page reveals:
+- Server software (Apache x.x.x)
+- PHP version
+- Loaded modules
+- Environment variables
+
+7. Search within the response
+8. Extract sensitive value:
+
+SECRET_KEY=xxxxxxxx
+
+9. Submit the extracted key  
+✅ Lab solved
+
+## 📸 Evidence (SS)
+
+### 🖼️ SS‑1: HTML Comment Disclosure
+
+- Developer HTML comment discovered in page source
+- Comment revealed a hidden internal endpoint
+
+[HTML comment exposing hidden endpoint](../images/html-comment-info-leak.png)
+
+---
+
+### 🖼️ SS‑2: Manual Access to Hidden Debug Endpoint
+
+- Hidden endpoint accessed directly via browser
+- Debug page loaded successfully
+- Sensitive information disclosed in response
+
+[Debug endpoint revealing secret key](../images/debug-endpoint-info-leak.png)
+
+---
+
+## 🌍 Real-World Scenarios (100% COMPLETE)
+
+### 1️⃣ Debug Pages Left in Production (MOST COMMON)
+
+Examples:
+- phpinfo.php
+- debug.php
+- test.php
+- info.php
+
+Impact:
+- Secret keys leaked
+- Session forging
+- Authentication bypass
+
+---
+
+### 2️⃣ HTML Comments Leaking Internal Paths
+
+Examples:
+<!-- TODO: remove /internal/debug -->
+<!-- Debug endpoint: /admin-test -->
+
+Impact:
+- Hidden admin/debug endpoints discovered
+- Attack surface expanded instantly
+
+---
+
+### 3️⃣ Environment Variable Disclosure
+
+Leaked via:
+- phpinfo()
+- debug dumps
+- error pages
+
+Impact:
+- SECRET_KEY exposure
+- JWT signing key leakage
+- OAuth token compromise
+
+---
+
+### 4️⃣ Framework & Server Version Disclosure
+
+Examples:
+- Apache x.x.x
+- PHP x.x.x
+- Laravel / Django versions
+
+Impact:
+- Public CVEs identified
+- Exploit selection becomes trivial
+
+---
+
+### 5️⃣ Debug APIs in Modern Applications
+
+Examples:
+- /debug/vars
+- /status
+- /metrics
+- /actuator/env (Spring)
+
+Impact:
+- Cloud secrets exposed
+- Internal service mapping
+
+---
+
+### 6️⃣ CI/CD & Development Artifacts Exposed
+
+Examples:
+- .env
+- .git/
+- Backup files
+- Test scripts
+
+Impact:
+- Full source disclosure
+- Credential reuse attacks
+
+---
+
+### 7️⃣ Cloud & Container Debug Endpoints
+
+Examples:
+- Kubernetes metrics
+- Docker diagnostics
+
+Impact:
+- Infrastructure compromise
+- Lateral movement
+
+---
+
+## 🎯 High-Value Endpoints to Always Test
+
+### Debug & Diagnostic Paths
+```
+/cgi-bin/phpinfo.php  
+/phpinfo.php  
+/info.php  
+/debug  
+/debug.php  
+/debug/vars  
+/status  
+/metrics  
+/health  
+/test  
+/dev  
+```
+---
+
+### Files & Configurations
+```
+/.env  
+/.git/  
+/config  
+/settings  
+/internal  
+```
+🔴 Any public access = **critical severity**
+
+---
+
+## 🔗 Multi-Chain Attacks (Real Hacker Paths)
+
+### Chain 1 (Classic & Guaranteed)
+
+HTML comment  
+→ Debug endpoint  
+→ SECRET_KEY leak  
+→ Session forging  
+→ Admin access  
+→ Full takeover
+
+---
+
+### Chain 2 (Version → Exploit)
+
+Debug page  
+→ Apache x.x.x disclosed  
+→ Public CVE identified  
+→ RCE exploit  
+→ Server compromise
+
+---
+
+### Chain 3 (Secrets → Auth Bypass)
+
+Environment variables  
+→ JWT secret leaked  
+→ Token forging  
+→ Authentication bypass  
+→ Account takeover
+
+---
+
+### Chain 4 (Debug → IDOR → Data Dump)
+
+Debug reveals internal APIs  
+→ IDOR discovered  
+→ User data extraction  
+→ Privacy breach
+
+---
+
+## 🛡️ Remediation (Developer Fix)
+
+✅ Remove all debug pages from production  
+✅ Disable phpinfo and CGI scripts  
+✅ Strip HTML comments before deployment  
+✅ Protect environment variables  
+✅ Use deny-by-default access controls  
+✅ Restrict diagnostics to localhost only  
+
+❌ NEVER:
+- Leave debug endpoints accessible
+- Assume “hidden” equals secure
+- Trust users not to view source
+- Expose secrets via diagnostics
+
+---
