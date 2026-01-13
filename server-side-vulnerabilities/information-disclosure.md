@@ -710,3 +710,273 @@ Hard‑coded password
 * Ignore leftover artifacts  
 
 ---
+
+# Lab-4 🛡️ Information Disclosure due to Insecure Configuration
+## (TRACE Method + Trusted Header Abuse)
+
+---
+
+## 🔹 Overview
+
+Information disclosure due to insecure configuration occurs when an application leaks
+sensitive internal details because unsafe HTTP methods or trust-based headers are enabled
+in production.
+
+This vulnerability is not caused by bad code, but by dangerous configuration decisions
+such as:
+
+- Allowing diagnostic HTTP methods (TRACE)
+- Trusting internal headers from the client
+- Using IP-based or proxy-based authorization
+- Exposing internal authentication logic
+
+This often leads directly to **admin authentication bypass**.
+
+---
+
+## 🔹 What Is This Topic?
+
+This issue falls under **Security Misconfiguration (OWASP A05)**.
+
+The core mistake is simple:
+
+**The backend trusts signals that the attacker fully controls.**
+
+These signals include:
+- HTTP headers
+- Client IP addresses
+- Reverse proxy headers
+- Debug HTTP methods
+
+If authorization depends on configuration instead of identity, it will fail.
+
+---
+
+## 🔹 Lab Walkthrough
+
+### 🎯 Goal
+
+Bypass admin authentication and delete user `carlos`.
+
+---
+
+### 1️⃣ Initial Admin Access Attempt
+
+Request:
+- GET /admin
+
+Response:
+- "Admin access only"
+- OR "Local users only"
+
+This indicates IP-based or internal-trust authorization logic.
+
+---
+
+### 2️⃣ Test for Debug HTTP Methods
+
+Send:
+- TRACE /admin
+
+TRACE is a diagnostic method and should never be enabled in production.
+
+---
+
+### 3️⃣ Information Disclosure via TRACE
+
+The TRACE response reflects the request and reveals an internal header:
+
+- X-Custom-IP-Authorization: <your-ip>
+
+This header:
+- Is trusted by the backend
+- Was intended for internal use
+- Is now visible to the attacker
+
+---
+
+### 4️⃣ Backend Authorization Logic
+
+The application logic behaves as:
+
+IF X-Custom-IP-Authorization == 127.0.0.1  
+THEN treat request as internal  
+ALLOW admin access
+
+The critical mistake:
+- The header is attacker-controlled
+
+---
+
+### 5️⃣ Exploitation
+
+Add the following header to requests:
+
+- X-Custom-IP-Authorization: 127.0.0.1
+
+This can be done using Burp Match & Replace.
+
+---
+
+### 6️⃣ Admin Panel Access
+
+Reload /admin
+
+Admin panel becomes accessible.
+
+---
+
+### 7️⃣ Impact
+
+- Delete user `carlos`
+- Lab solved successfully
+
+---
+
+## 🔹 Evidence
+
+### Screenshot-1
+- ![TRACE method discloses internal header](../images/trace-header-disclosure.png)
+
+### Screenshot-2
+- ![Forged internal header grants admin access](../images/admin-access-via-header.png)
+
+---
+
+## 🔹 Real-World Scenarios
+
+### 1️⃣ Reverse Proxy Trust Abuse (Very Common)
+
+Backends trust headers like:
+- X-Forwarded-For
+- X-Real-IP
+
+Attackers can send these headers directly.
+
+Impact:
+- Internal-only endpoints exposed
+- Full admin bypass
+
+---
+
+### 2️⃣ IP-Based Authentication
+
+Seen in:
+- Corporate dashboards
+- Banking admin panels
+- Legacy enterprise systems
+
+Impact:
+- Anyone can impersonate localhost
+
+---
+
+### 3️⃣ Debug HTTP Methods Enabled
+
+Methods such as:
+- TRACE
+- OPTIONS
+- DEBUG
+
+Impact:
+- Header disclosure
+- Authentication logic leakage
+
+---
+
+### 4️⃣ Cloud & Microservices
+
+Trust-based headers between services are abused externally.
+
+Impact:
+- One misconfiguration compromises all services
+
+---
+
+## 🔹 High-Value Endpoints
+
+### Endpoints
+```
+- /admin
+- /manage
+- /internal
+- /debug
+- /config
+- /health
+- /api/admin
+```
+### Headers to Test
+```
+- X-Forwarded-For
+- X-Real-IP
+- X-Custom-IP-Authorization
+- X-Internal-IP
+- X-Originating-IP
+```
+
+### Methods to Test
+```
+- TRACE
+- OPTIONS
+- PUT
+- DELETE
+```
+
+---
+
+## 🔹 Multi-Chain Attacks
+
+### Chain 1
+TRACE enabled  
+→ Internal header disclosed  
+→ Header forged  
+→ Admin bypass  
+→ User deletion
+
+### Chain 2
+Header trust bypass  
+→ Admin API access  
+→ IDOR  
+→ Database dump
+
+### Chain 3
+Proxy header abuse  
+→ Internal service access  
+→ Credential leakage  
+→ Server takeover
+
+---
+
+## 🔹 Remediation
+
+### ✅ Correct Fixes
+
+- Disable TRACE and debug HTTP methods
+- Strip trusted headers at the edge
+- Never use headers for authentication
+- Enforce role checks server-side
+- Use session-based authorization
+
+---
+
+### ❌ Never Do This
+
+- Trust IP-based headers
+- Trust Referer or proxy headers
+- Leave debug features enabled
+- Assume headers are internal-only
+
+---
+
+## 🔹 Extra Notes
+
+**Golden Rule:**
+If authentication depends on headers, it is already broken.
+
+**Pentest Red Flags:**
+- “Local users only” messages
+- TRACE method enabled
+- Reflected headers
+- IP-based access logic
+
+---
