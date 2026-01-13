@@ -465,3 +465,248 @@ Debug reveals internal APIs
 - Expose secrets via diagnostics
 
 ---
+
+# Lab-3 🛡️ Source Code Disclosure via Backup Files
+**(Complete & Real‑World)**
+
+---
+
+## 🔹 Overview
+
+Source code disclosure via backup files occurs when an application unintentionally exposes non‑executable copies of its own source code.
+
+These backup files are often created during development, editing, or maintenance and are mistakenly left accessible in production environments.
+
+Exposed source code frequently contains:
+
+* Hard‑coded database credentials  
+* API keys and secrets  
+* Internal application logic  
+* Hidden endpoints and admin functionality  
+
+Once source code is disclosed, exploitation becomes trivial.  
+This is a **high‑impact information disclosure vulnerability** commonly observed in real‑world applications.
+
+---
+
+## 🔹 What Is This Topic?
+
+This topic covers information disclosure caused by leftover backup or temporary files that are served as plain text by the web server.
+
+Common backup extensions include:
+
+* `.bak`  
+* `.old`  
+* `.backup`  
+* `.save`  
+* `~`  
+
+### Core Concept
+
+> **The server executes real source files but serves backup files as readable text.**
+
+Attackers exploit this behavior to directly read application source code.
+
+---
+
+## 🔹 Lab Walkthrough (Exact Solve Flow)
+
+### 1️⃣ Initial Recon — `robots.txt` Discovery
+
+Access the following endpoint:
+
+* `/robots.txt`
+
+The file discloses restricted or sensitive paths that are not meant for users.
+
+This provides strong reconnaissance clues for further enumeration.
+
+---
+
+### 2️⃣ Manual Enumeration — Backup Directory Found
+
+Using information from `robots.txt`, manually access:
+
+* `/backup/`
+
+The directory is publicly accessible and contains backup artifacts.
+
+---
+
+### 3️⃣ Identifying Backup Source Code
+
+Inside the backup directory, locate a backup file such as:
+
+* `product-template.java.bak`
+
+The file is **not executed** by the server and is served as plain text.
+
+---
+
+### 4️⃣ Accessing the Backup File
+
+Request the backup file directly:
+
+* `/backup/product-template.java.bak`
+
+The server responds with **raw Java source code**.
+
+---
+
+### 5️⃣ Source Code Analysis
+
+Review the source code carefully.
+
+Identify database connection logic containing:
+
+* Hard‑coded database username  
+* Hard‑coded database password  
+
+Sensitive credentials are exposed directly in the source.
+
+---
+
+### 6️⃣ Extract Secret & Complete Lab
+
+* Copy the disclosed database password  
+* Submit the password as the solution  
+
+✅ **Lab solved**
+
+---
+
+## 🔹 Evidence
+### Screenshot-1 (robots.txt revealing restricted paths)
+* ![robots.txt revealing restricted paths](../images/robots-txt-backup-leak.png)
+
+### Screenshot-2 (exposed /backup directory listing)
+* ![exposed /backup directory listing](../images/backup-directory-files-leak.png)
+
+### Screenshot-3 ( database password found in source code)
+* ![database password found in source code](../images/db-password-source-leak.png)
+
+---
+
+## 🔹 Real‑World Scenarios (**Guaranteed & Practical**)
+
+### 1️⃣ Production Backup Files (**MOST COMMON**)
+
+Developers often:
+
+* Edit files directly on production servers  
+* Use editors that auto‑create `.bak` files  
+* Forget to remove backup artifacts  
+
+**Impact:**
+
+* Full source code disclosure  
+* Credential leakage  
+* Business logic exposure  
+
+---
+
+### 2️⃣ Hard‑Coded Secrets in Source Code
+
+Frequently exposed secrets include:
+
+* Database credentials  
+* API keys  
+* Cloud service secrets  
+
+**Impact:**
+
+* Database takeover  
+* External service abuse  
+* Lateral movement  
+
+---
+
+### 3️⃣ Forgotten Directories
+
+Common high‑risk directories:
+
+* `/backup`  
+* `/old`  
+* `/dev`  
+* `/test`  
+* `/tmp`  
+
+**Impact:**
+
+* Entire application logic exposed  
+* Easier chaining of vulnerabilities  
+
+---
+
+## 🔹 High‑Value Files & Locations (Always Test)
+
+### 🔴 High‑Risk Backup Targets
+
+* `config.*`  
+* `application.*`  
+* `settings.*`  
+* `db.*`  
+* `template.*`  
+
+### 🔴 High‑Risk Directories
+
+* `/backup/`  
+* `/old/`  
+* `/dev/`  
+* `/test/`  
+* `/.tmp/`  
+
+➡️ **If source code is readable → Critical Severity**
+
+---
+
+## 🔹 Multi‑Chain Attacks (Real Hacker Paths)
+
+### Chain 1 — Credential Compromise
+
+Backup file  
+→ Source code disclosure  
+→ Database credentials  
+→ Database access  
+→ User data dump  
+
+---
+
+### Chain 2 — Logic Abuse
+
+Source code  
+→ Hidden admin endpoints discovered  
+→ Access control bypass  
+→ Privilege escalation  
+
+---
+
+### Chain 3 — Credential Reuse
+
+Hard‑coded password  
+→ Reused elsewhere  
+→ Admin panel / SSH login  
+→ Full server compromise  
+
+---
+
+## 🔹 Remediation (**Correct Fix Only**)
+
+### ✅ Secure Practices
+
+* Never deploy backup or temp files  
+* Block backup extensions at web‑server level  
+* Store secrets in environment variables  
+* Use proper `.gitignore` rules  
+* Audit production directories regularly  
+
+---
+
+### ❌ Never
+
+* Hard‑code credentials  
+* Edit files directly on production  
+* Assume hidden folders are secure  
+* Ignore leftover artifacts  
+
+---
