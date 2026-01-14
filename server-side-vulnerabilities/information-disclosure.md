@@ -980,3 +980,307 @@ If authentication depends on headers, it is already broken.
 - IP-based access logic
 
 ---
+
+# Lab-5 📂 Information Disclosure via Version Control History
+
+(Complete & Real-World Notes)
+
+---
+
+## 🔹 Overview
+
+Information disclosure via version control history occurs when a website accidentally exposes its Git repository to users.
+
+This allows attackers to:
+
+- Download full source code
+- Read old commits and diffs
+- Recover deleted secrets (passwords, API keys)
+- Understand application logic and admin workflows
+
+📌 This is a high-impact misconfiguration and often leads directly to admin takeover.
+
+---
+
+## 🔹 What Is This Topic?
+
+This vulnerability is a combination of:
+
+- Information Disclosure
+- Security Misconfiguration (OWASP A05)
+
+**Core mistake:**
+
+> Developers deploy the `.git/` directory to production, exposing the entire development history.
+
+Even if secrets were removed later, Git permanently stores them in history.
+
+⚠️ Deleting a secret from code ≠ deleting it from Git.
+
+---
+
+## 🔹 Lab Walkthrough (Simple, Clear & Complete)
+
+### 🎯 Goal
+
+Recover the administrator password from Git history, log in, and delete user **carlos**.
+
+---
+
+### 1️⃣ Check if Git Is Publicly Accessible
+
+Visit in browser:
+
+```
+/.git/
+```
+
+If directory listing or Git files appear → Git repository is exposed ✅
+
+---
+
+### 2️⃣ Download the Git Repository
+
+From Kali / Linux / WSL:
+
+```
+wget -r https://LAB-ID.web-security-academy.net/.git/
+```
+
+This downloads:
+
+- Commit history
+- Logs
+- Diffs
+- Repository metadata
+
+---
+
+### 3️⃣ Enter the Downloaded Directory
+
+```
+cd LAB-ID.web-security-academy.net
+```
+
+---
+
+### 4️⃣ Confirm Valid Git Repository
+
+```
+git status
+```
+
+✔ Confirms repository integrity
+
+---
+
+### 5️⃣ View Commit History
+
+```
+git log
+```
+
+Look for suspicious commit messages such as:
+
+- `Remove admin password`
+- `Fix security issue`
+- `Cleanup config`
+
+📌 These often indicate leaked credentials.
+
+---
+
+### 6️⃣ Inspect the Suspicious Commit
+
+```
+git show <commit_hash>
+```
+
+---
+
+### 7️⃣ Extract the Leaked Secret
+
+Example diff:
+
+```
+- admin_password = "X8fK92LmQ"
++ admin_password = getenv("ADMIN_PASSWORD")
+```
+
+**Important Git rule:**
+
+- `-` line → OLD value → **REAL leaked secret**
+- `+` line → New secure implementation
+
+👉 Extract password from the `-` line.
+
+---
+
+### 8️⃣ Login as Administrator
+
+- **Username:** administrator  
+- **Password:** <leaked_password>
+
+---
+
+### 9️⃣ Complete the Lab
+
+- Access admin panel
+- Delete user **carlos**
+
+✅ Lab solved
+
+---
+
+## 🔹 Evidence
+
+### 🖼️ Screenshot-1 
+- ![Public access to exposed .git directory](../images/git-exposed-browser.png)
+
+### 🖼️ Screenshot-2 
+- ![Password extracted from git history via terminal](../images/git-secret-terminal.png)
+
+---
+
+## 🔹 Real-World Scenarios (High-Guarantee)
+
+### 1️⃣ Hard-Coded Credentials in Git (Very Common)
+
+Developers commit:
+
+- Admin passwords
+- Database credentials
+- API tokens
+
+Even if removed later → still accessible in Git history.
+
+---
+
+### 2️⃣ Cloud & CI/CD Secret Leaks
+
+Git history may expose:
+
+- AWS access keys
+- JWT signing secrets
+- OAuth client secrets
+
+📌 Leads to cloud account takeover.
+
+---
+
+### 3️⃣ Internal Logic Disclosure
+
+Attackers learn:
+
+- Admin endpoints
+- Feature flags
+- Disabled security checks
+
+📌 Makes further exploitation trivial.
+
+---
+
+### 4️⃣ Bug-Fix Commits as Attack Guides
+
+Commit messages like:
+
+> "Fix authentication bypass"
+
+Reveal:
+
+- What was vulnerable
+- Where to attack
+
+---
+
+## 🔹 High-Value Targets to Always Test
+
+### 🔴 Endpoints
+
+- `/.git/`
+- `/.git/config`
+- `/.git/HEAD`
+- `/.git/logs/`
+
+### 🔴 Files That Often Leak Secrets
+
+- `config.php`
+- `.env`
+- `settings.py`
+- `application.properties`
+- `database.yml`
+
+### 🔴 Commit Keywords to Hunt
+
+- password
+- secret
+- token
+- auth
+- fix
+- remove
+- cleanup
+
+---
+
+## 🔹 Multi-Chain Attacks (Real Hacker Paths)
+
+### Chain 1 (This Lab)
+
+```
+.git exposed
+→ Admin password recovered
+→ Admin login
+→ User deletion
+```
+
+---
+
+### Chain 2 (Very Real)
+
+```
+.git exposed
+→ API key leaked
+→ API abuse
+→ Data exfiltration
+```
+
+---
+
+### Chain 3 (Advanced)
+
+```
+.git exposed
+→ Internal logic understood
+→ Auth bypass discovered
+→ Full system compromise
+```
+
+---
+
+## 🔹 Remediation (Correct Fix Only)
+
+### ✅ Do This
+
+- Never deploy `.git/` to production
+- Block `.git` at web server level
+- Rotate all exposed secrets immediately
+- Store secrets in environment variables
+- Audit repositories before deployment
+
+---
+
+### ❌ Never Do This
+
+- Assume "we removed it later"
+- Leave secrets in commit history
+- Ignore exposed Git metadata
+
+---
+
+## 🔹 Extra Notes / Pentest Gold
+
+🧠 **Golden Rule:**
+
+> Git remembers everything developers forget.
+
+---
