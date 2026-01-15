@@ -991,3 +991,347 @@ Logic bug
 ## 🧠 One-Line Memory Hook
 
 > Logic bugs don’t break the app — they break the business.
+
+---
+
+# Lab-4 🧠 Failing to Handle Unconventional Input
+## High Integer Value / Integer Overflow — Business Logic Vulnerability
+
+---
+
+## 🔹 Overview
+
+Failing to handle unconventional input is a *business logic vulnerability* where an application does not correctly validate or constrain extreme numeric values supplied by the client.
+
+Instead of crashing, the application:
+
+- Accepts the value  
+- Performs arithmetic operations  
+- Triggers an integer overflow  
+- Continues execution using an incorrect result  
+
+📌 This is *not* a technical exception or crash  
+📌 This is a *logic failure* that directly enables financial abuse
+
+Integer overflow bugs frequently result in:
+
+- Free or underpriced purchases  
+- Wallet balance manipulation  
+- Refund abuse  
+- Loyalty point inflation  
+
+---
+
+## 🔹 What Is This Topic?
+
+This vulnerability occurs when applications:
+
+- Trust numeric input too much  
+- Assume values remain within “reasonable” limits  
+- Fail to enforce upper and lower bounds  
+- Use unsafe integer arithmetic in business logic  
+
+Commonly affected systems:
+
+- Shopping carts  
+- Wallets and balances  
+- Refund mechanisms  
+- Subscriptions  
+- Loyalty and reward programs  
+- Booking and reservation systems  
+
+These bugs are:
+
+- ❌ Hard for scanners to detect  
+- ❌ Invisible in UI testing  
+- ✅ Extremely high impact in real-world systems  
+
+---
+
+## 🔹 Lab Walkthrough
+### High Integer Overflow — Cart Logic Abuse
+
+### 🎯 Goal
+
+Purchase an expensive item without sufficient balance by forcing the cart total to overflow into an acceptable value.
+
+---
+
+### Step 1: Establish Normal Behavior
+
+*Purpose:* Confirm that business logic checks exist before attempting to break them.
+
+1. Log in as a normal user  
+2. Add an expensive product to the cart  
+3. Attempt to checkout  
+4. Checkout fails due to insufficient balance  
+
+✔️ Confirms server-side balance validation exists  
+
+---
+
+### Step 2: Identify High-Risk Input
+
+*Purpose:* Locate numeric parameters that influence business decisions.
+
+1. Intercept the request using Burp Suite  
+2. Observe the following request:
+
+POST /cart
+
+3. Identify the parameter:
+
+quantity
+
+✔️ Quantity is trusted by the server  
+✔️ Quantity directly affects price calculation  
+
+---
+
+### Step 3: Test Basic Validation
+
+*Purpose:* Determine validation boundaries.
+
+Test the following values:
+
+0 -1 99 999
+
+Observed behavior:
+
+- Large values are accepted  
+- No upper bound enforced  
+
+✔️ Indicates partial or missing validation  
+
+---
+
+### Step 4: Push Quantity to Extreme Values
+
+*Purpose:* Prepare conditions required for integer overflow.
+
+1. Send the request to Burp Repeater  
+2. Increment the quantity aggressively  
+3. Observe cart total growth  
+
+📌 This mirrors real-world mobile API abuse patterns  
+
+---
+
+### Step 5: Trigger Integer Overflow
+
+*Internal behavior:*
+
+- Backend uses 32-bit signed integers  
+- Maximum integer value is exceeded  
+- Arithmetic wraps around  
+
+Result:
+
+- Cart total becomes negative or very small  
+- Application continues normal execution  
+
+✔️ Overflow successfully triggered  
+
+---
+
+### Step 6: Controlled Total Adjustment
+
+*Purpose:* Bypass checkout validation logic.
+
+1. Push total just beyond integer limit  
+2. Allow overflow to occur  
+3. Add or remove items to tune the total  
+
+Target condition:
+
+0 < cart_total ≤ user_balance
+
+✔️ Checkout logic accepts the manipulated total  
+
+---
+
+### Step 7: Complete Checkout
+
+1. Final cart total is positive  
+2. Total is less than available balance  
+3. Place the order successfully  
+
+✔️ Expensive item purchased at minimal cost  
+✔️ Lab successfully completed  
+
+---
+
+## 🌍 Real-World Scenarios
+
+Each scenario shows: *Expected logic → Vulnerability → Exploitation*
+
+---
+
+### 🔹 Scenario 1: Quantity Overflow
+
+*Expected:* Quantity has strict upper bounds  
+*Bug:* No maximum enforced  
+
+*Exploit:*
+1. Set quantity to extreme value  
+2. Total overflows  
+3. Item purchased cheaply  
+
+---
+
+### 🔹 Scenario 2: Price × Quantity Overflow
+
+*Expected:* Safe multiplication  
+*Bug:* Unsafe integer arithmetic  
+
+*Exploit:*
+1. High price × high quantity  
+2. Overflow occurs  
+3. Total wraps  
+
+---
+
+### 🔹 Scenario 3: Wallet Credit Abuse
+
+*Expected:* Total must remain positive  
+*Bug:* Negative total allowed  
+
+*Exploit:*
+1. Overflow creates negative total  
+2. Wallet credited instead of charged  
+
+---
+
+### 🔹 Scenario 4: Refund Overflow
+
+*Expected:* Refund ≤ amount paid  
+*Bug:* Overflow unchecked  
+
+*Exploit:*
+1. Submit large refund value  
+2. Balance credited  
+
+---
+
+### 🔹 Scenario 5: Discount + Overflow Chain
+
+*Expected:* Discounts validated  
+*Bug:* Discount applied after overflow  
+
+*Exploit:*
+1. Overflow → negative total  
+2. Discount applied  
+3. User receives credit  
+
+---
+
+### 🔹 Scenario 6: Subscription Abuse
+
+*Expected:* Fixed subscription cost  
+*Bug:* Duration or quantity overflow  
+
+*Exploit:*
+1. Supply large duration  
+2. Overflow  
+3. Free premium access  
+
+---
+
+### 🔹 Scenario 7: Loyalty Points Inflation
+
+*Expected:* Points capped  
+*Bug:* No upper bound  
+
+*Exploit:*
+1. Overflow during calculation  
+2. Massive points credited  
+
+---
+
+### 🔹 Scenario 8: Booking Cost Manipulation
+
+*Expected:* Cost ≥ 0  
+*Bug:* Duration × rate overflow  
+
+*Exploit:*
+1. Extreme duration  
+2. Negative cost  
+3. Free booking  
+
+---
+
+### 🔹 Scenario 9: Inventory Inflation
+
+*Expected:* Stock decreases safely  
+*Bug:* Overflow on quantity  
+
+*Exploit:*
+1. Cancel order with huge quantity  
+2. Stock increases  
+
+---
+
+### 🔹 Scenario 10: Tax / Shipping Overflow
+
+*Expected:* Calculated server-side safely  
+*Bug:* Overflow not validated  
+
+*Exploit:*
+1. Overflow reduces tax or shipping  
+2. Final total minimized  
+
+---
+
+## 🎯 High-Value Endpoints
+
+Endpoints commonly affected by integer overflow logic:
+
+POST /cart POST /checkout POST /refund POST /wallet POST /redeem POST /apply-discount POST /subscription POST /booking
+
+---
+
+## 🔗 Multi-Chain Attacks
+
+Integer overflow frequently chains with:
+
+- IDOR (modifying other users’ carts)  
+- Race conditions (double spending)  
+- CSRF (forced overflow actions)  
+- Wallet abuse  
+- Refund abuse  
+
+---
+
+## 🛡️ Remediation
+
+### ✅ Secure Fixes
+
+- Enforce strict upper and lower bounds  
+- Use safe integer types  
+- Detect and prevent overflow  
+- Recalculate all totals server-side  
+- Validate each item independently  
+
+### ❌ Never Do
+
+- Trust frontend validation  
+- Trust client-supplied totals  
+- Assume values remain reasonable  
+
+---
+
+## 🧠 Extra Notes
+
+- Always test extreme numeric values  
+- UI limits are meaningless  
+- Overflow bugs are *money bugs*  
+- Frequently rewarded in bug bounties  
+
+---
+
+## 🔑 Final Takeaway
+
+> When large numbers influence business decisions, integer overflow becomes a security vulnerability — not a math mistake.
+
+
+---
