@@ -645,3 +645,349 @@ Open successful request → authenticated as **carlos**.
 ## 🧠 One-Line Memory Hook
 
 > 2FA fails not when OTP is weak — but when logic is weak.
+
+---
+
+# Lab-3 🧠 Failing to Handle Unconventional Input
+## (Business Logic Vulnerability – Complete & Real-World)
+
+---
+
+## 🔹 Overview
+
+Failing to handle unconventional input is a business logic vulnerability where an application does not correctly validate unexpected, edge-case, or abnormal user input.
+
+The application behaves “as designed”, but the **design assumptions are flawed**.
+
+Instead of exploiting technical bugs, attackers exploit:
+- Math
+- Assumptions
+- Workflow logic
+
+This vulnerability is extremely common in systems involving:
+- Payments
+- Store credit
+- Orders & refunds
+- Loyalty points
+- Booking systems
+
+📌 Often leads directly to **financial loss**.
+
+---
+
+## 🔹 What Is This Topic?
+
+This topic focuses on **broken assumptions** about user input.
+
+Developers assume:
+- Numbers will be positive
+- Values will be reasonable
+- Users will follow the UI
+- Frontend validation is enough
+
+**Core mistake:**
+
+> The server does not enforce strict boundaries on numeric or logical input.
+
+Because business logic is custom:
+- Automated scanners ❌ miss it
+- Manual testing ✅ finds it
+- Impact is usually **high to critical**
+
+---
+
+## 🔹 Lab Walkthrough
+### (Negative Quantity Jacket Lab)
+
+### 🎯 Goal
+
+Purchase a **$1337 Leather Jacket** using **$100 store credit** by abusing unconventional numeric input.
+
+---
+
+### 1️⃣ Intended Workflow Recon
+
+1. Login as:
+   - `wiener : peter`
+
+2. Browse products  
+3. Attempt to buy expensive item normally  
+
+❌ Checkout fails due to insufficient credit  
+✔️ Confirms server checks **final total only**
+
+---
+
+### 2️⃣ Identify User-Controlled Logic Parameter
+
+1. Intercept request:
+   - `POST /cart`
+
+2. Observe parameter:
+   - `quantity`
+
+⚠️ Quantity is **fully trusted by backend**
+
+---
+
+### 3️⃣ Inject Unconventional Input
+
+Modify parameter:
+- `quantity = -41`
+
+Forward request.
+
+✔️ Cart total becomes **negative**  
+➡️ Validation missing  
+➡️ Logic flaw confirmed
+
+---
+
+### 4️⃣ Weaponize the Math
+
+Cheap item price:
+- `$32.45`
+
+Calculation:
+- `-41 × 32.45 = -1330.45`
+
+✔️ Cart total heavily negative
+
+---
+
+### 5️⃣ Add Expensive Item
+
+1. Add **Leather Jacket ($1337)** normally
+
+Server calculation:
+- `-1330.45 + 1337 = 6.55`
+
+✔️ Final total:
+- Greater than `$0`
+- Less than `$100` store credit
+
+---
+
+### 6️⃣ Checkout
+
+Server validates only:
+- `final_total ≤ store_credit`
+
+✔️ Purchase succeeds  
+✔️ Jacket bought for **$6.55**
+
+✅ **Lab solved**
+
+---
+
+## 🔹 Evidence (SS)
+
+### Screenshot-1
+- ![Negative quantity injected in POST /cart](../images/negative-quantity-cart.png)
+
+### Screenshot-2  
+- ![Successful checkout for $6.55](../images/checkout-low-price.png)
+
+---
+
+## 🔹 Real-World Scenarios
+### (NO SCENARIOS SKIPPED)
+
+---
+
+### 1️⃣ Negative Quantity Purchases
+
+**Bug:**
+- Only checks `quantity ≤ stock`
+
+**Exploit:**
+- `quantity = -10`
+- Total becomes negative
+
+📌 Impact: free items / credit gain
+
+---
+
+### 2️⃣ Negative Funds Transfer
+
+**Bug:**
+- Only checks `amount ≤ balance`
+
+**Exploit:**
+- `amount = -1000`
+- Balance increases
+
+---
+
+### 3️⃣ Client-Side Price Trust
+
+**Bug:**
+- Price accepted from client
+
+**Exploit:**
+- `price = 1`
+- Premium item cheap
+
+---
+
+### 4️⃣ Quantity Overflow
+
+**Bug:**
+- No upper bounds
+
+**Exploit:**
+- `quantity = 999999999`
+- Integer overflow / free items
+
+---
+
+### 5️⃣ Negative Discount Abuse
+
+**Bug:**
+- Discount not bounded
+
+**Exploit:**
+- `discount = -100`
+- Checkout adds money
+
+---
+
+### 6️⃣ Refund Logic Abuse
+
+**Bug:**
+- Only checks `refund ≤ paid`
+
+**Exploit:**
+- `refund = -500`
+- Merchant charged
+
+---
+
+### 7️⃣ Loyalty / Reward Abuse
+
+**Bug:**
+- Points not validated
+
+**Exploit:**
+- `points = -1000`
+- Points credited
+
+---
+
+### 8️⃣ Date / Time Logic Abuse
+
+**Bug:**
+- No date comparison
+
+**Exploit:**
+- End < Start
+- Negative booking cost
+
+---
+
+### 9️⃣ Shipping Cost Manipulation
+
+**Bug:**
+- Client-supplied shipping
+
+**Exploit:**
+- `shipping = -50`
+- Total reduced
+
+---
+
+### 🔟 Inventory Inflation
+
+**Bug:**
+- Quantity trusted on cancel
+
+**Exploit:**
+- Cancel with `quantity = -100`
+- Inventory increases
+
+---
+
+## 🔹 High-Value Endpoints to Test
+
+- `POST /cart`
+- `POST /checkout`
+- `POST /order`
+- `POST /refund`
+- `POST /transfer`
+- `POST /redeem`
+- `POST /apply-coupon`
+- `POST /booking`
+- `POST /cancel`
+
+🔴 Any endpoint that processes numbers = **high risk**
+
+---
+
+## 🔹 Multi-Chain Attacks
+
+### Chain 1
+Negative quantity  
+→ Free purchase  
+→ Refund abuse  
+→ Unlimited balance
+
+---
+
+### Chain 2
+Logic flaw  
+→ IDOR on cart  
+→ Financial theft
+
+---
+
+### Chain 3
+Race condition  
+→ Double spend  
+→ Negative balance abuse
+
+---
+
+### Chain 4
+Logic bug  
+→ Invoice manipulation  
+→ Stored XSS  
+→ Account takeover
+
+---
+
+## 🔹 Remediation (Correct Fix Only)
+
+### ✅ Required Defenses
+- Reject negative values
+- Enforce upper & lower bounds
+- Recalculate totals server-side
+- Validate **per item**, not just final total
+
+### ❌ Never
+- Trust frontend validation
+- Trust client-supplied math
+- Assume users behave normally
+
+---
+
+## 🔹 Extra Notes (Exam + Bug Bounty)
+
+**Golden Rule:**
+
+> If math is client-controlled, money is attacker-controlled.
+
+**Always test with:**
+- `-1`
+- `0`
+- `1`
+- Very large numbers
+
+📌 Severity:
+- OWASP A04 – Insecure Design
+- High → Critical
+
+---
+
+## 🧠 One-Line Memory Hook
+
+> Logic bugs don’t break the app — they break the business.
