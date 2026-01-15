@@ -363,3 +363,285 @@ Manual logic testing ✅
 ## 🧠 One-Line Memory Hook
 
 > Business logic bugs don’t break code — they break companies.
+
+---
+
+# Lab-2 🛡️ Business Logic Vulnerability – Flawed 2FA Logic
+## (Complete & Real-World)
+
+---
+
+## 🔹 Overview
+
+Flawed 2FA logic vulnerabilities occur when an application implements multi-factor authentication but fails to correctly bind the OTP to the **right user, session, or authentication flow**.
+
+Instead of attacking cryptography, attackers exploit **logic assumptions** made by the application.
+
+**Impact includes:**
+- Account takeover
+- Authentication bypass
+- Privilege escalation
+
+This vulnerability is **extremely common** in custom-built authentication systems.
+
+---
+
+## 🔹 What Is This Topic?
+
+This is a **Business Logic / Insecure Design** vulnerability.
+
+**Core mistake:**
+
+> The application trusts client-controlled identity parameters during 2FA.
+
+In flawed 2FA implementations:
+- OTP is generated
+- OTP is verified
+- ❌ OTP is NOT securely bound to:
+  - The correct user
+  - The correct session
+  - The correct authentication step
+
+⚠️ If identity can be controlled by the client, **2FA provides zero security**.
+
+---
+
+## 🔹 Lab Walkthrough (Clear & Exact)
+
+### 🎯 Objective
+
+Authenticate as **carlos** without knowing his password by abusing flawed 2FA logic.
+
+---
+
+### 1️⃣ Observe Normal Authentication Flow
+
+- Login using valid credentials:
+
+  - **Username:** wiener  
+  - **Password:** peter
+
+- Server flow:
+  - `POST /login`
+  - Redirect → `/login2`
+
+- Observe parameters used during 2FA:
+  - `verify`
+  - `mfa-code`
+
+📌 Purpose: understand how OTP generation and verification works.
+
+---
+
+### 2️⃣ Generate OTP for Victim User
+
+- Log out from the application
+- Manually access:
+
+  `GET /login2?verify=carlos`
+
+**Result:**
+- Server generates an OTP for **carlos**
+- No authentication required ❌
+
+📌 Critical flaw: OTP generation depends solely on a client-controlled parameter.
+
+---
+
+### 3️⃣ Start Legitimate Login as Attacker
+
+- Login again as:
+
+  - **Username:** wiener  
+  - **Password:** peter
+
+- Reach the OTP verification step
+- Submit any random OTP
+- Intercept the request:
+
+  `POST /login2`
+
+---
+
+### 4️⃣ Brute-Force OTP for Victim
+
+- Send the intercepted request to Intruder
+- Configure payloads:
+
+  - `verify=carlos` (fixed)
+  - `mfa-code=§000000§`
+
+- Payload range:
+  - `000000` → `999999`
+
+- Start attack
+
+---
+
+### 5️⃣ Identify Successful Authentication
+
+Success indicators:
+- HTTP 302 redirect
+- Different response length
+- Access to victim account
+
+Open successful request → authenticated as **carlos**.
+
+---
+
+### 6️⃣ Complete the Lab
+
+- Access **My Account**
+- Confirm victim login
+
+✅ **Lab solved**
+
+---
+
+## 🔹 Evidence (SS)
+
+### Screenshot-1
+- ![OTP generated for victim via verify parameter](../images/otp-generation-carlos.png)
+
+  ### Screenshot-2
+- ![OTP brute force authentication as victim](../images/otp-bruteforce-success.png)
+
+---
+
+## 🔹 Real-World Scenarios (NO SKIPS)
+
+### 1️⃣ OTP User Binding Failure
+- OTP tied to `verify=username`
+- Attacker modifies parameter
+
+**Impact:** account takeover
+
+---
+
+### 2️⃣ OTP Brute Force (No Rate Limiting)
+- Unlimited OTP attempts
+
+**Impact:** full authentication bypass
+
+---
+
+### 3️⃣ OTP Reuse
+- OTP remains valid after use
+
+**Impact:** replay attacks
+
+---
+
+### 4️⃣ OTP Session Confusion
+- OTP generated in one session
+- Used in another
+
+**Impact:** cross-session takeover
+
+---
+
+### 5️⃣ Password Reset OTP Misbinding
+- OTP not bound to email/user
+
+**Impact:** reset victim password
+
+---
+
+### 6️⃣ Debug / Test OTPs
+- Static OTPs like `000000`
+
+**Impact:** universal bypass
+
+---
+
+### 7️⃣ Frontend-Only OTP Validation
+- Backend never validates OTP
+
+**Impact:** direct API bypass
+
+---
+
+### 8️⃣ OAuth / SSO 2FA Bypass
+- 2FA enforced at IdP only
+
+**Impact:** login without second factor
+
+---
+
+## 🔹 High-Value Endpoints to Test
+
+- `/login`
+- `/login2`
+- `/verify`
+- `/otp`
+- `/mfa`
+- `/2fa`
+- `/reset`
+
+🔴 Any **user-controlled identity parameter** = critical risk.
+
+---
+
+## 🔹 Multi-Chain Attacks
+
+### Chain 1
+- OTP misbinding  
+→ OTP brute force  
+→ Account takeover
+
+---
+
+### Chain 2
+- OTP bypass  
+→ Password reset  
+→ Permanent takeover
+
+---
+
+### Chain 3
+- XSS  
+→ OTP/session theft  
+→ Privilege escalation
+
+---
+
+## 🔹 Remediation (Correct Fix Only)
+
+### ✅ Proper Fixes
+- Bind OTP to **user + session + step**
+- Enforce strict rate limiting
+- Single-use OTPs
+- Regenerate session after auth
+- Enforce 2FA on sensitive actions
+
+---
+
+### ❌ Never
+- Trust `verify` parameters
+- Separate OTP generation & verification
+- Allow OTP reuse
+- Rely on frontend validation
+
+---
+
+## 🔹 Extra Notes (Exam + Pentest)
+
+**Golden Rule:**
+
+> OTP without binding is not authentication.
+
+**Red Flags:**
+- `verify=username`
+- Public OTP endpoints
+- No rate limiting
+- Same OTP works twice
+
+**Severity:**
+- OWASP A04 – Insecure Design
+- High → Critical
+
+---
+
+## 🧠 One-Line Memory Hook
+
+> 2FA fails not when OTP is weak — but when logic is weak.
