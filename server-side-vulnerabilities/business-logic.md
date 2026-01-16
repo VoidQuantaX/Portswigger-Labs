@@ -1333,5 +1333,307 @@ Integer overflow frequently chains with:
 
 > When large numbers influence business decisions, integer overflow becomes a security vulnerability — not a math mistake.
 
+---
+
+# Lab-5 🧠 Failing to Handle Unconventional Input
+## Input Truncation & Inconsistent Validation — Business Logic Vulnerability
+
+---
+
+## 🔹 Overview
+
+Failing to handle unconventional input occurs when an application processes user input inconsistently across different system layers, often due to silent truncation caused by backend storage limits.
+
+In such cases, the application may:
+
+- Accept overly long input  
+- Silently truncate it at the database layer (e.g., VARCHAR limits)  
+- Perform authentication or authorization using the truncated value  
+- While other systems rely on the full, unmodified input  
+
+📌 The vulnerability lies in *system disagreement*, not a single bug  
+📌 Result is often *authorization bypass without owning a trusted identity*
+
+---
+
+## 🔹 What Is This Topic?
+
+### Core Concept
+
+Inconsistent input handling across system boundaries.
+
+Specifically:
+
+- Client submits long identifiers (email / username)  
+- Backend database truncates input silently  
+- Authorization logic trusts the truncated value  
+- Attacker controls truncation boundaries  
+
+This is *NOT*:
+
+- SQL Injection  
+- XSS  
+- Password bypass  
+
+This *IS*:
+
+- Business logic flaw  
+- Input length & truncation vulnerability  
+- Authorization bypass via malformed identity  
+
+---
+
+## 🔹 Lab Walkthrough
+### Input Truncation — Authorization Logic Abuse
+
+---
+
+### Step 1: Recon & Authorization Model Discovery
+
+1. Locate the admin endpoint:
+
+/admin
+
+2. Attempt access as a normal user  
+
+3. Access denied with message indicating:
+
+> Only users from dontwannacry.com allowed
+
+📌 Key observation:
+
+- Authorization is *email-domain based*
+- Not role-based
+- Not permission-based  
+
+This is a logic weakness.
+
+---
+
+### Step 2: Understand the Registration Architecture
+
+Two independent systems are involved:
+
+#### 1️⃣ Email Delivery System
+
+- Uses full email string  
+- No truncation  
+- Sends confirmation email to full address  
+
+#### 2️⃣ Application Server + Database
+
+- Stores email in a fixed-length column  
+- Truncates input silently  
+- Uses stored value for authorization  
+
+⚠️ These systems enforce *different constraints*
+
+---
+
+### Step 3: Why Long Input Is Required
+
+Registering directly as:
+
+user@dontwannacry.com
+
+fails because:
+
+- Attacker does not control the domain  
+- Confirmation email cannot be received  
+
+Therefore, attacker must:
+
+- Receive email at attacker-controlled domain  
+- Appear as dontwannacry.com *after truncation*
+
+➡️ Long input is the only way to satisfy both systems.
+
+---
+
+### Step 4: Identify Truncation Behavior
+
+Register using an intentionally long email:
+
+[very-long-local-part]@attacker-domain.web-security-academy.net
+
+Observed behavior:
+
+- Email delivery succeeds  
+- Stored email is silently truncated  
+
+Confirms:
+
+- Truncation exists  
+- Max length enforced at storage layer  
+- No validation error is thrown  
+
+---
+
+## 🧾 Evidence: Long Input Accepted
+
+### Screenshot-1
+![Long password / identifier accepted by application](../images/long-input-accepted.png)
+
+### Screenshot-2
+![Email truncated and trusted after authentication](../images/truncated-email-visible.png)
+
+---
+
+### Step 5: Precision Exploit Construction
+
+Craft email as:
+
+[padding-to-boundary]@dontwannacry.com.attacker-domain.web-security-academy.net
+
+System interpretation:
+
+- Email system → full address → attacker receives email  
+- Database → truncates after dontwannacry.com  
+
+Final stored value:
+
+user@dontwannacry.com
+
+✔️ Authorization logic now treats attacker as internal user
+
+---
+
+### Step 6: Exploit Result
+
+1. Log in using confirmed account  
+2. Access:
+
+/admin
+
+3. Perform privileged action (e.g., delete user)
+
+✔️ Authorization bypass achieved  
+✔️ Lab solved  
+
+---
+
+## 🌍 Real-World Scenarios
+
+---
+
+### 🔹 Scenario 1: Legacy Databases
+
+- VARCHAR(255) fields  
+- Old ORMs  
+- Silent truncation  
+
+📌 Extremely common in enterprise systems
+
+---
+
+### 🔹 Scenario 2: Email-Domain-Based Authorization
+
+- Admin panels  
+- Internal dashboards  
+- Employee-only portals  
+
+📌 Domain ≠ identity
+
+---
+
+### 🔹 Scenario 3: Microservices Mismatch
+
+- Auth service validates full input  
+- Application service truncates stored value  
+
+📌 Cross-service trust failure
+
+---
+
+### 🔹 Scenario 4: SSO + Local User Storage
+
+- SSO trusts full email  
+- Local DB truncates  
+- Authorization performed locally  
+
+📌 Common in hybrid auth systems
+
+---
+
+## ❌ What Does NOT Happen in Real Applications
+
+- Infinite cart loops  
+- UI-only validation bugs  
+- Completely uncontrolled storage overflow  
+
+📌 Real vulnerabilities are subtle and assumption-based
+
+---
+
+## 🎯 High-Value Targets
+
+Endpoints to prioritize:
+
+/admin /internal /dashboard /manage /staff /ops /support
+
+Features involving:
+
+- Email-based roles  
+- Domain allowlists  
+- “Employees only” logic  
+
+---
+
+## 🔗 Multi-Chain Attacks
+
+This vulnerability often escalates into:
+
+- Admin access → account takeover  
+- Admin access → stored XSS  
+- Admin access → password reset abuse  
+- Admin access → SSRF / RCE  
+
+📌 Logic flaws compound rapidly
+
+---
+
+## 🛡️ Remediation
+
+### ✅ Correct Defenses
+
+- Validate length *before* storage  
+- Canonicalize input prior to validation  
+- Never authorize by email domain  
+- Use RBAC / permission models  
+- Fail hard on truncation  
+
+### ❌ Never
+
+- Rely on database limits as validation  
+- Trust identity strings for authorization  
+
+---
+
+## 🧠 Extra Notes
+
+- Precision matters more than brute force  
+- Character counting is critical  
+- Always test boundary lengths  
+
+Without Burp Pro:
+
+- Register  
+- Log in  
+- Inspect profile  
+- Observe truncation visually  
+- Adjust length iteratively  
+
+---
+
+## 🔑 Final Reality Check
+
+❌ Servers do not “plan” truncation  
+✅ Truncation is inherited from storage limits  
+
+❌ Developers expect consistency  
+✅ Attackers exploit mismatches  
+
+> This vulnerability exists because systems disagree — not because code crashes.
+
 
 ---
