@@ -1635,5 +1635,242 @@ Without Burp Pro:
 
 > This vulnerability exists because systems disagree — not because code crashes.
 
+---
+
+# Lab-6 🧠 Business Logic Vulnerability – Inconsistent Authorization Enforcement
+## (Privilege Escalation via Post-Registration Email Update)
 
 ---
+
+## 🔐 Overview
+
+This lab demonstrates a *business logic vulnerability* caused by inconsistent authorization enforcement.
+
+The application performs a trust check *only once* (during registration) and then assumes the user remains trustworthy forever.  
+Because of this flawed assumption, later actions that affect authorization are *not revalidated*.
+
+As a result, a normal authenticated user can escalate privileges to *admin* without exploiting any technical vulnerability.
+
+Root cause:  
+*Authorization logic applied at the wrong time*
+
+---
+
+## 📘 What Is This Topic?
+
+This issue belongs to *Business Logic / Insecure Design*, not technical vulnerabilities.
+
+### Core Principle
+
+> Security decisions must be enforced continuously, not just once.
+
+### Developer Assumptions
+
+- Registration = permanent trust  
+- Logged-in users = safe  
+- Profile updates = harmless  
+
+### Attacker Reality
+
+- Identity data is mutable  
+- Trust is reused incorrectly  
+- Authorization depends on user-controlled fields  
+
+### Key Mistake
+
+- Authorization depends on *mutable identity data*
+- Checks are *not repeated* when that data changes
+
+---
+
+## 🧪 Lab Walkthrough (Clean & Generalized)
+
+### Step 1️⃣ Registration
+
+The application states:
+
+> “If you work for DontWannaCry, use your company email.”
+
+- Register using a *normal email* (PortSwigger email client)
+- Account created successfully
+
+*State:*
+- Role: normal user
+- Admin access: ❌ denied
+
+---
+
+### Step 2️⃣ Login
+
+- Log in with the registered credentials
+- Attempt to access:
+
+/admin
+
+*Result:*
+- ❌ Access denied
+
+✔️ Confirms admin access is restricted  
+✔️ Authorization enforced at this stage  
+
+---
+
+### Step 3️⃣ Update Email (Core Logic Flaw)
+
+On *My Account, an **Update Email* feature is available.
+
+Change email to:
+
+xyz@dontwannacry.com
+
+#### ❌ Application Assumption
+
+> “This user already passed checks during registration.”
+
+#### ❌ What Fails
+
+- No revalidation of domain ownership
+- No authorization check on identity change
+- Updated value is blindly trusted
+
+*This is the vulnerability.*
+
+Authorization logic is *skipped* when identity data changes.
+
+---
+
+### Step 4️⃣ Access Admin Panel
+
+Revisit:
+
+/admin
+
+*Result:*
+- ✔️ Access granted
+
+The application now believes:
+
+> “User belongs to trusted domain → admin allowed”
+
+---
+
+### Step 5️⃣ Lab Completion
+
+- Delete user *carlos*
+
+✔️ Admin action successful  
+✔️ Lab solved  
+
+---
+
+## 🧾 Evidence
+
+### Evidence 1️⃣ – Privilege Escalation via Email Update
+
+![Updated email to trusted domain and gained admin access](../images/update-email-admin-access.png)
+
+---
+
+## 🌍 Real-World Scenarios
+
+### Scenario 1️⃣ Company Email Trust
+
+- Email domain checked only at signup
+- Email update allowed without validation
+- Attacker switches to @company.com
+- Gains internal/admin access
+
+---
+
+### Scenario 2️⃣ Role Upgrade via Profile Update
+
+- Role validated at login
+- Profile update endpoint allows role/identity change
+- No server-side recheck
+- Privilege escalation
+
+---
+
+### Scenario 3️⃣ Trusted Session Assumption
+
+- User verified once
+- Sensitive actions skip authorization
+- Assumption: “User already proved identity”
+- Leads to staff/admin access
+
+---
+
+## 🎯 High-Value Endpoints
+
+Always audit carefully:
+
+/my-account /update-email /profile /settings /user/update /change-role /admin
+
+🔴 Especially dangerous if they:
+- Modify identity data
+- Influence authorization
+- Are assumed safe after login
+
+---
+
+## 🔗 Multi-Chain Attacks
+
+Typical attack chain:
+
+1. Normal registration
+2. Legitimate login
+3. Profile update (identity change)
+4. Authorization bypass
+5. Admin access
+
+### Real-World Chains
+
+- Profile update + weak auth → privilege escalation
+- IDOR + trusted user assumption
+- Logic flaw → admin panel compromise
+
+---
+
+## 🛡️ Remediation (Correct Fixes)
+
+### ✅ Proper Security Design
+
+- Revalidate authorization on *every sensitive action*
+- Never trust client-controlled identity fields
+- Enforce server-side authorization on every request
+- Separate identity from privilege
+
+Email ≠ role Domain ≠ admin
+
+Use RBAC / permission systems.
+
+---
+
+## 📝 Extra Notes / Pentest Tips
+
+❌ Not SQL Injection  
+❌ Not brute force  
+❌ Not a technical bypass  
+
+✅ Pure business logic abuse  
+
+### Exam / Interview Line
+
+> “Authorization must be enforced at every point where trust can change.”
+
+### Pentester Mindset
+
+Whenever you see:
+- “Only employees can…”
+- “Only admins can…”
+- “Verified users can…”
+
+Always ask:
+
+> “Can I change something after login that affects this check?”
+
+---
+
+## 🔑 Final Takeaway
+
+> Trust that is not continuously verified will always be exploited.
