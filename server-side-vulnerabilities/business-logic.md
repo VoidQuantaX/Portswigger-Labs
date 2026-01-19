@@ -2291,7 +2291,7 @@ Submitted request.
 * Empty token (URL + body)
 * Modified username
 
-![Password reset token removed and username changed](../images/reset_token_removed.png)
+![Password reset token removed and username changed](../images/reset-token-removed.png)
 
 ---
 
