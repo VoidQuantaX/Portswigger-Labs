@@ -2172,3 +2172,271 @@ Pure Business Logic
 ## 🧠 One-Line Memory Hook
 
 > If the server doesn’t enforce mandatory input, the attacker decides what is mandatory.
+
+---
+
+# Lab-8 🐞 Password Reset Vulnerability – Token Validation Bypass
+(Logic Flaw – Missing Token Enforcement)
+
+---
+
+## 🔐 Overview
+
+This lab demonstrates a *password reset business logic vulnerability* where the application generates a reset token but fails to enforce its validation during password submission.
+
+The backend assumes that if a reset request reaches the endpoint, the token must already be valid. Because of this flawed assumption, the token can be removed entirely without affecting the reset process.
+
+As a result, an attacker can reset *any user’s password*, leading to full account takeover.
+
+This is a *critical real-world vulnerability* and commonly exploited in production systems.
+
+---
+
+## 📘 What Is This Topic?
+
+This issue falls under:
+
+* Broken Authentication
+* Business Logic Vulnerabilities
+
+### Core Mistake
+
+> The application assumes token presence implies token validity.
+
+### Reality
+
+* Tokens exist but are *not enforced*
+* Server trusts *client-controlled parameters*
+* Identity is determined by mutable request values
+
+Attackers do not break encryption —  
+they exploit *missing verification logic*.
+
+---
+
+## 🧪 Lab Walkthrough (Step-by-Step)
+
+### Step 1: Access Password Reset
+
+* Logged in as wiener
+* Navigated to *Forgot Password*
+* Requested a password reset
+
+---
+
+### Step 2: Open Reset Link
+
+* Opened the email client
+* Clicked the password reset link
+* Redirected to password reset form
+
+---
+
+### Step 3: Intercept Reset Request
+
+Intercepted the password submission request in Burp:
+
+* Token present in URL
+* Token present in request body
+* Username included as a parameter
+
+---
+
+### Step 4: Test Token Validation (Core Flaw)
+
+In Burp Repeater:
+
+* Removed token value from URL
+* Removed token value from request body
+
+Result:
+
+* Password reset still succeeds
+
+✅ Confirms token is *not validated server-side*
+
+---
+
+### Step 5: Exploit Identity Control
+
+Modified request:
+
+* Changed:
+
+username=wiener
+
+to:
+
+username=carlos
+
+* Token values remain *empty*
+
+Submitted request.
+
+---
+
+### Step 6: Account Takeover
+
+* Logged in as carlos
+* Used the new password
+* Access granted
+
+🎯 Lab solved
+
+---
+
+## 🧾 Evidence
+
+* Password reset request succeeds with:
+* Empty token (URL + body)
+* Modified username
+
+![Password reset token removed and username changed](../images/reset_token_removed.png)
+
+---
+
+## 🌍 Real-World Scenarios
+
+### 1. Token Not Validated (MOST COMMON)
+
+* Token generated but never checked
+* Reset endpoint blindly accepts request
+
+*Impact:*
+* Any account takeover
+* Zero authentication required
+
+---
+
+### 2. Username Controlled by Client
+
+* Username / email sent in hidden field
+* Server trusts provided value
+
+*Impact:*
+* Attacker resets victim password
+
+---
+
+### 3. Token Checked Only on Page Load
+
+* Token validated on GET request
+* NOT validated on POST submission
+
+*Impact:*
+* Direct POST bypasses protection
+
+---
+
+### 4. Empty Token Accepted
+
+* Logic checks only for parameter existence
+* Empty value treated as valid
+
+*Impact:*
+* Token removal bypass
+
+---
+
+### 5. Email = False Security Assumption
+
+* Developers trust email delivery
+* Attackers replay requests directly
+
+*Impact:*
+* Email protection fully bypassed
+
+---
+
+### 6. Mass Account Takeover
+
+* Flaw is scriptable
+* No rate limiting
+* No monitoring
+
+*Impact:*
+* Entire user base compromise
+
+---
+
+### 7. Privilege Escalation
+
+* Victim may be admin or staff
+
+*Impact:*
+* Full system compromise
+
+---
+
+## 🎯 High-Value Endpoints
+
+Always test:
+
+* /forgot-password
+* /reset-password
+* /password-reset
+* /account/recover
+* /change-password
+
+### Parameters to Manipulate
+
+* username
+* email
+* userId
+* token
+* reset_token
+* temp_token
+
+---
+
+## 🔗 Multi-Chain Attacks
+
+### Chain 1: Account Takeover
+
+* Token bypass
+* Password reset
+* User takeover
+
+---
+
+### Chain 2: Admin Compromise
+
+* Guess admin username
+* Reset password
+* Admin panel access
+
+---
+
+### Chain 3: Reset + IDOR
+
+* Identify user IDs
+* Reset multiple accounts
+
+---
+
+## 🛡️ Remediation
+
+* Enforce strict token validation server-side
+* Bind token to:
+* User
+* Expiration
+* Single use
+* Reject empty or missing tokens
+* Never accept username from client
+* Apply rate limiting
+* Log and alert reset attempts
+
+---
+
+## ❌ Never Do This
+
+* Accept empty tokens
+* Trust hidden fields
+* Validate only on page load
+* Assume email = authentication
+
+---
+
+## 🧠 One-Line Memory Hook
+
+> A password reset without strict token validation is just an account takeover API.
