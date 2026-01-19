@@ -2440,3 +2440,314 @@ Always test:
 ## 🧠 One-Line Memory Hook
 
 > A password reset without strict token validation is just an account takeover API.
+
+---
+
+# Lab-9 🐞 Authentication Bypass – 2FA Enforcement Failure (Workflow Bypass)
+(Users Won’t Always Follow the Intended Sequence)
+
+
+---
+
+## 🔹 Overview
+
+This lab demonstrates an authentication logic vulnerability where two-factor authentication (2FA) is enforced only through frontend workflow, not by server-side authorization state.
+
+The application assumes that once a user submits valid credentials, they will always complete the 2FA verification step before accessing protected resources.
+
+However, the backend does not enforce this assumption.
+
+As a result, an attacker with valid credentials can bypass the 2FA verification step entirely by directly navigating to a protected account endpoint.
+
+**📌 Root cause:** Authentication is treated as step-based instead of state-based.
+
+
+---
+
+## 🔹 What Is This Topic?
+
+This is a **Business Logic / Authentication Workflow** vulnerability.
+
+### Core mistake
+
+> The application trusts the frontend authentication sequence instead of enforcing authentication state on the server.
+
+### Key concepts involved
+
+* Login is implemented as a sequence of pages
+* Backend assumes previous steps were completed
+* Protected endpoints do not verify full authentication state
+
+Attackers do not follow workflows.
+They directly access endpoints.
+
+
+---
+
+## 🔹 Lab Walkthrough (Simple & Clear)
+
+### 1️⃣ Login as Attacker (Valid User)
+
+Credentials used:
+
+* Username: `wiener`
+* Password: `peter`
+
+Login is successful.
+
+
+---
+
+### 2️⃣ Complete Legitimate 2FA Once
+
+* 2FA verification code is sent to the email client
+* Correct code is submitted
+* Full authentication is completed
+
+This step is used only to **observe application behavior**.
+
+
+---
+
+### 3️⃣ Observe Account Endpoint
+
+After successful authentication, the following endpoint is accessed:
+
+`GET /my-account?id=wiener`
+
+📌 This endpoint:
+* Is accessible after login
+* Uses a predictable, user-controlled parameter
+* Does not include any visible 2FA state validation
+
+
+---
+
+### 4️⃣ Logout Completely
+
+The attacker logs out to reset the session state.
+
+
+---
+
+### 5️⃣ Login as Victim (Without Completing 2FA)
+
+Victim credentials:
+
+* Username: `carlos`
+* Password: `montoya`
+
+Login succeeds and the application prompts for 2FA verification.
+
+
+---
+
+### 6️⃣ Bypass 2FA via Direct URL Access
+
+Instead of submitting the 2FA code, the URL is manually changed from:
+
+`GET /login2`
+
+to:
+
+`GET /my-account?id=carlos`
+
+
+---
+
+### 7️⃣ Access Granted Without 2FA
+
+✔️ Victim account page loads  
+❌ 2FA verification never completed  
+❌ Server did not enforce authentication state  
+
+**→ Lab solved**
+
+
+---
+
+## 🔹 Evidence
+
+![2FA bypass via direct /my-account access](../images/2fa-workflow-bypass.png)
+
+
+---
+
+## 🔹 Real-World Scenarios (COMPLETE – NO SKIPS)
+
+### 1️⃣ Direct Endpoint Access Bypassing 2FA (MOST COMMON)
+
+* Username/password verified
+* 2FA page displayed
+* Backend does not restrict protected endpoints
+
+📌 **Impact:** Full account takeover
+
+
+---
+
+### 2️⃣ ID-Based Account Pages
+
+Examples:
+
+* `/my-account?id=user`
+* `/profile?userId=123`
+
+📌 **Impact:** Account access without completing authentication
+
+
+---
+
+### 3️⃣ Banking & FinTech Applications
+
+* OTP step shown
+* Session already considered authenticated
+
+📌 **Impact:** Unauthorized transactions and fraud
+
+
+---
+
+### 4️⃣ Enterprise Dashboards
+
+* Employees required to use 2FA
+* Admin dashboards accessible via direct URLs
+
+📌 **Impact:** Internal system compromise
+
+
+---
+
+### 5️⃣ University / Student Portals
+
+* Shared authentication logic
+* ID-based access control
+* Weak enforcement of OTP step
+
+📌 **Impact:** Grade manipulation and data exposure
+
+
+---
+
+### 6️⃣ Mobile App APIs
+
+* Session token issued before OTP verification
+* API accepts token as fully authenticated
+
+📌 **Impact:** Mass account takeover via automation
+
+
+---
+
+### 7️⃣ SaaS Platforms
+
+* Same session before and after 2FA
+* Sensitive endpoints lack revalidation
+
+📌 **Impact:** Tenant and admin compromise
+
+
+---
+
+## 🔹 High-Value Endpoints to Always Test
+
+### Authentication & Account Endpoints
+
+* `/my-account`
+* `/profile`
+* `/dashboard`
+* `/account`
+* `/settings`
+* `/admin`
+* `/user?id=`
+
+### 2FA / Auth Flow Endpoints
+
+* `/login`
+* `/login2`
+* `/verify`
+* `/otp`
+* `/2fa`
+* `/auth/complete`
+
+📌 Always test direct access **before** completing all auth steps.
+
+
+---
+
+## 🔹 Multi-Chain Attacks (Real Hacker Paths)
+
+### Chain 1 – Classic 2FA Bypass
+
+* Valid credentials
+* Skip 2FA
+* Direct account access
+* Account takeover
+
+
+---
+
+### Chain 2 – 2FA Bypass + IDOR
+
+* Login
+* Skip OTP
+* Modify `id` parameter
+* Access other users
+* Data breach
+
+
+---
+
+### Chain 3 – 2FA Bypass → Privilege Escalation
+
+* Employee login
+* Skip 2FA
+* Access admin endpoints
+* Full system compromise
+
+
+---
+
+## 🔹 Remediation (Developer Fix)
+
+✅ Enforce authentication **state**, not workflow  
+✅ Block all protected endpoints until 2FA is verified  
+✅ Tie session to authentication level  
+✅ Re-check authorization on every request  
+✅ Use server-side flags (e.g., `is_2fa_verified = true`)  
+
+
+---
+
+## ❌ NEVER
+
+* Trust frontend navigation
+* Assume users complete steps
+* Expose predictable account URLs
+* Grant access based on password alone
+
+
+---
+
+## 🔹 Extra Notes / Tips (Exam + Bug Bounty)
+
+### 🧠 Golden Rule
+
+> Authentication is not complete until the server enforces it.
+
+### 🔥 Red Flags
+
+* Account URLs with `id=` parameters
+* Same session before and after 2FA
+* No server-side blocking of protected pages
+* Manual navigation works during login flow
+
+📌 **Severity:** High → Critical  
+📌 **Category:** Business Logic / Authentication Bypass
+
+
+---
+
+## 🔹 One-Line Memory Hook
+
+> If you can reach it before finishing login, authentication is broken.
