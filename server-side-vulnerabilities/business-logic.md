@@ -1874,3 +1874,301 @@ Always ask:
 ## 🔑 Final Takeaway
 
 > Trust that is not continuously verified will always be exploited.
+
+---
+
+# Lab-7 🐞 Business Logic Vulnerability – Users Won’t Always Supply Mandatory Input
+# (Password Change Logic Flaw – Identity Manipulation)
+
+---
+
+## 🔹 Overview
+
+This business logic vulnerability occurs when an application assumes that users will always supply mandatory input fields.
+
+In reality, attackers can intercept and manipulate HTTP requests to:
+
+- Remove required parameters entirely
+- Modify identity-related values
+- Force unintended logic paths
+
+When backend validation is weak or missing, sensitive actions may execute without proper verification.
+
+### Impact:
+- Account takeover
+- Privilege escalation
+- Full administrative compromise
+
+This flaw is extremely common in real-world systems that rely on frontend enforcement.
+
+---
+
+## 🔹 What Is This Topic?
+
+This is a *Business Logic vulnerability*, not a technical flaw like SQLi or XSS.
+
+### Core mistake:
+
+> Required fields are enforced by the UI, not the server.
+
+Browsers enforce:
+- Required inputs
+- Field constraints
+
+Attackers:
+- Do not use browsers
+- Send raw HTTP requests
+- Remove parameters completely
+
+If the server does not *strictly enforce mandatory input*, security controls silently fail.
+
+---
+
+## 🔹 Lab Walkthrough (Simple & Clear)
+
+### 1️⃣ Login as a Normal User
+
+Credentials:
+
+wiener : peter
+
+You are authenticated as a low-privileged user.
+
+No admin access is available.
+
+---
+
+### 2️⃣ Navigate to Password Change Functionality
+
+The normal password change request contains:
+
+username=wiener current-password=peter new-password=** confirm-password=**
+
+The application assumes current-password is mandatory.
+
+---
+
+### 3️⃣ Remove Mandatory Input (Logic Flaw Trigger)
+
+Intercept the request and *remove the current-password parameter entirely*.
+
+Modified request:
+
+username=wiener new-password=test123 confirm-password=test123
+
+Result:
+- ✅ Password change succeeds
+- ❌ No current password verification
+
+This confirms a logic flaw.
+
+---
+
+### 4️⃣ Modify Identity Parameter (Privilege Escalation)
+
+Change:
+
+username=wiener
+
+To:
+
+username=administrator
+
+Keep current-password removed.
+
+Final malicious request:
+
+username=administrator new-password=admin123 confirm-password=admin123
+
+---
+
+### 5️⃣ Send the Request
+
+The server accepts the request.
+
+- Administrator password is changed
+- No admin authentication performed
+
+---
+
+### 6️⃣ Admin Login & Lab Completion
+
+Login as:
+
+administrator : admin123
+
+Access:
+
+/admin
+
+Delete user:
+
+carlos
+
+✅ Lab solved
+
+---
+
+## 🔹 Evidence
+
+### Screenshot-01
+![Username changed from wiener to administrator (password change request)](../images/logic-mandatory-input-username-change.png)
+
+---
+
+## 🔹 Real-World Scenarios
+
+### 1️⃣ Password Change Without Current Password (MOST COMMON)
+
+Frontend enforces current password  
+Backend does not validate presence  
+
+*Impact:*
+- Account takeover
+- Credential abuse
+
+---
+
+### 2️⃣ Client-Controlled Identity Fields
+
+Endpoints accept:
+- username
+- userId
+- email
+
+*Impact:*
+- Password reset for other users
+- Privilege escalation
+
+---
+
+### 3️⃣ Mobile & API Applications
+
+JSON requests allow missing keys  
+Backend applies default logic  
+
+*Impact:*
+- Mass account takeover via automation
+
+---
+
+### 4️⃣ Enterprise / Internal Portals
+
+Profile update endpoints weakly validated  
+
+*Impact:*
+- Admin account compromise
+- Internal system takeover
+
+---
+
+### 5️⃣ Banking & FinTech Systems
+
+UI enforces required fields  
+Backend trusts request structure  
+
+*Impact:*
+- Unauthorized password resets
+- Financial fraud
+
+---
+
+### 6️⃣ University / Education Portals
+
+Shared logic for students and staff  
+
+*Impact:*
+- Grade manipulation
+- Sensitive data exposure
+
+---
+
+### 7️⃣ SaaS Platforms
+
+Single endpoint handles multiple roles  
+
+*Impact:*
+- Admin takeover
+- Tenant compromise
+
+---
+
+## 🔹 High-Value Endpoints to Always Test
+```
+/my-account
+/change-password 
+/reset-password 
+/update-profile 
+/account/settings 
+/user/update 
+/admin/update-user
+/api/user/update
+```
+
+🔴 Any endpoint modifying identity or credentials is high risk.
+
+---
+
+## 🔹 Multi-Chain Attacks
+
+### Chain 1 (Classic)
+
+Missing mandatory parameter → Identity manipulation → Password reset → Admin access → Full takeover
+
+---
+
+### Chain 2 (Logic + IDOR)
+
+Missing validation → Modify userId → Change another user’s password → Account takeover
+
+---
+
+### Chain 3 (Logic + Automation)
+
+API accepts missing fields → Scripted requests → Mass password resets
+
+---
+
+## 🔹 Remediation
+
+✔ Enforce mandatory input server-side  
+✔ Reject requests with missing required fields  
+✔ Explicitly verify current password  
+✔ Enforce authorization on identity changes  
+✔ Restrict users to modifying only their own accounts  
+
+---
+
+## ❌ Never
+
+- Rely on frontend validation
+- Assume parameters will always exist
+- Trust client-supplied identity values
+
+---
+
+## 🔹 Extra Notes (Exam + Bug Bounty)
+
+### Golden Rule
+
+> If a parameter is mandatory in the UI, remove it and test the backend.
+
+### Red Flags
+
+- Requests succeed without required fields
+- Identity fields in request body
+- Same endpoint works across roles
+
+Severity:
+
+High → Critical
+
+Category:
+
+Pure Business Logic
+
+---
+
+## 🧠 One-Line Memory Hook
+
+> If the server doesn’t enforce mandatory input, the attacker decides what is mandatory.
