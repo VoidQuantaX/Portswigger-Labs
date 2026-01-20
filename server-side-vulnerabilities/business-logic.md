@@ -2751,3 +2751,227 @@ Examples:
 ## 🔹 One-Line Memory Hook
 
 > If you can reach it before finishing login, authentication is broken.
+
+---
+
+# Lab-10 🐞 Logic Flaws – Flawed Assumptions About the Sequence of Events  
+(Purchasing Workflow Bypass / Users Won’t Follow Intended Flow)
+
+---
+
+## 🔹 Overview
+
+This vulnerability occurs when an application assumes users will always follow a predefined workflow enforced by the UI.
+
+In reality, attackers can:
+
+- Skip steps  
+- Replay requests  
+- Reorder actions  
+- Directly access “final” endpoints  
+
+If the backend does **not strictly enforce workflow state**, attackers can complete sensitive actions such as purchases or confirmations **without completing required prior steps** like payment or checkout.
+
+📌 This is a **high-impact business logic flaw**, extremely common in real-world e-commerce systems.
+
+---
+
+## 🔹 What Is This Topic?
+
+This is a **Business Logic vulnerability**, not a technical exploit.
+
+**Core mistake:**
+
+> The backend trusts that “Step A already happened before Step B” because the UI normally enforces it.
+
+Developers assume:
+
+- If confirmation is reached → payment must be complete  
+- If success endpoint is hit → checkout already happened  
+
+Attackers **do not follow UI flows**.  
+They interact directly with backend endpoints.
+
+---
+
+## 🔹 Lab Walkthrough  
+*(Flawed Assumptions About the Sequence of Events)*
+
+### 🎯 Lab Goal
+
+Purchase the **Lightweight l33t leather jacket**  
+**without completing checkout or payment**.
+
+---
+
+### 🔐 Step 1: Login
+
+Log in with valid credentials:
+
+- **Username:** wiener  
+- **Password:** peter  
+
+---
+
+### 🛒 Step 2: Understand Intended Flow
+
+The application expects:
+
+1. View product  
+2. Add to cart  
+3. Checkout  
+4. Payment  
+5. Order confirmation  
+
+⚠️ Backend **assumes** this order is always followed.
+
+---
+
+### 🧪 Step 3: Recon (Legitimate Purchase)
+
+Purpose: identify real endpoints.
+
+- Add a **cheap item** to cart  
+- Complete full checkout  
+
+Observe normal behavior.
+
+---
+
+### 🔍 Step 4: Observe Requests (Burp Proxy)
+
+During checkout, note the final request:
+
+GET /cart/order-confirmation?order-confirmed=true
+
+📌 This endpoint tells the server:
+
+> “The order is complete.”
+
+This is the **vulnerable endpoint**.
+
+---
+
+### 🔁 Step 5: Send to Repeater
+
+Send this request to Burp Repeater:
+
+GET /cart/order-confirmation?order-confirmed=true
+
+---
+
+### 🧥 Step 6: Add Expensive Item
+
+- Add **Lightweight l33t leather jacket** to cart  
+- ❌ Do NOT checkout  
+- ❌ Do NOT pay  
+
+At this stage, the item is **only in the cart**.
+
+---
+
+### 💥 Step 7: Exploit Workflow Bypass
+
+In Burp Repeater, resend:
+
+GET /cart/order-confirmation?order-confirmed=true
+
+---
+
+### 🧠 Server-Side Behavior
+
+Backend:
+
+- ❌ Does NOT verify payment  
+- ❌ Does NOT verify checkout state  
+- ✅ Assumes workflow completed  
+
+➡️ Marks cart items as **purchased**
+
+---
+
+### 🖥️ Step 8: UI Errors Are Misleading
+
+Browser may show:
+
+- “Invalid checkout”  
+- Errors  
+
+⚠️ UI errors ≠ exploit failed  
+Backend state is already modified.
+
+---
+
+### ✅ Step 9: Lab Solved
+
+Server believes the jacket was purchased.
+
+✔️ Lab completed successfully.
+
+---
+
+## 🔹 Evidence
+
+### 🖼️ Evidence – Order Confirmation Bypass
+
+![Order confirmation accessed directly without checkout](../images/workflow-bypass-confirmation.png)
+
+---
+
+## 🌍 Real-World Scenarios
+
+- **E-commerce:** Buy products for free  
+- **Ticketing:** Confirm bookings without payment  
+- **FinTech:** Replay payment success callbacks  
+- **Subscriptions:** Activate premium plans without billing  
+- **Education portals:** Unlock paid courses  
+
+---
+
+## 🎯 High-Value Endpoints
+
+Always test endpoints like:
+
+- `/cart/checkout`  
+- `/order-confirmation`  
+- `/payment/success`  
+- `/finalize`  
+- `/activate`  
+
+🚩 Red flags:
+
+- `confirmed=true`  
+- No order-state validation  
+- No payment reference  
+
+---
+
+## 🔗 Multi-Chain Attacks
+
+Often chains with:
+
+- Replay attacks  
+- IDOR  
+- Price manipulation  
+- Auth / logic flaws  
+
+---
+
+## 🛡️ Remediation
+
+✅ Enforce workflow state server-side  
+✅ Use strict state machines  
+✅ Validate payment on confirmation  
+✅ Bind confirmation to user + order  
+✅ Use one-time tokens  
+
+❌ Never trust UI flow or query flags
+
+---
+
+## 🧠 Final Takeaway
+
+> UI is guidance. Backend is security.
+
+If a final endpoint works without re-checking earlier steps,  
+**the workflow is broken.**
