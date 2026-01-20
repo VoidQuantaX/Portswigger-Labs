@@ -2841,9 +2841,9 @@ Observe normal behavior.
 ### 🔍 Step 4: Observe Requests (Burp Proxy)
 
 During checkout, note the final request:
-
+```
 GET /cart/order-confirmation?order-confirmed=true
-
+```
 📌 This endpoint tells the server:
 
 > “The order is complete.”
@@ -2855,9 +2855,9 @@ This is the **vulnerable endpoint**.
 ### 🔁 Step 5: Send to Repeater
 
 Send this request to Burp Repeater:
-
+```
 GET /cart/order-confirmation?order-confirmed=true
-
+```
 ---
 
 ### 🧥 Step 6: Add Expensive Item
@@ -2873,9 +2873,9 @@ At this stage, the item is **only in the cart**.
 ### 💥 Step 7: Exploit Workflow Bypass
 
 In Burp Repeater, resend:
-
+```
 GET /cart/order-confirmation?order-confirmed=true
-
+```
 ---
 
 ### 🧠 Server-Side Behavior
@@ -2975,3 +2975,287 @@ Often chains with:
 
 If a final endpoint works without re-checking earlier steps,  
 **the workflow is broken.**
+
+---
+
+# Lab-11 🐞 Logic Flaws – Flawed Assumptions About the Login Sequence
+## (Role Selection Bypass / Authentication Flow Abuse)
+
+---
+
+## 🔹 Overview
+
+**This vulnerability occurs when an application makes unsafe assumptions about the order of steps during the authentication or login process.**
+
+### Expected flow:
+- **Login**
+- **Select a role**
+- **Access homepage**
+
+### Attacker behavior:
+- *Skip intermediate steps*
+- *Drop critical requests*
+- *Directly access protected endpoints*
+
+> **If the backend does not strictly enforce login state and role assignment, users may be assigned default or unintended roles — including administrator.**
+
+📌 **Result:** Authentication bypass + privilege escalation  
+📌 **Category:** Business Logic / Auth Flow Abuse
+
+---
+
+## 🔹 What Is This Topic?
+
+### ❗ This is NOT:
+- ❌ Password brute-force
+- ❌ Session fixation
+- ❌ Token leakage
+
+### ✅ This IS:
+- **Business Logic Vulnerability**
+- **Broken authentication flow**
+- **Unsafe backend assumptions**
+
+> **Core mistake:**  
+> The backend assumes users will *always* follow the intended login sequence.
+
+### Developers incorrectly trust that:
+- Role selection will *always* happen  
+- Every login reaches the role-selection step  
+- Skipping a step is *impossible*
+
+🧠 **Attackers exploit this trust by manipulating HTTP traffic.**
+
+---
+
+## 🔹 Lab Walkthrough
+### 🧪 Flawed Assumptions About the Sequence of Events
+
+---
+
+## 🎯 Lab Goal
+
+**Bypass authentication logic → Gain administrator access → Delete user `carlos`**
+
+---
+
+## 🔐 Step 1: Normal Login Observation
+
+**Credentials used:**
+- **Username:** `wiener`
+- **Password:** `peter`
+
+### After login:
+
+GET /role-selector
+
+User must select a role before reaching the homepage.
+
+### 📌 Observations:
+- Role is assigned **after** login  
+- Role assignment is handled by a **separate endpoint**
+
+---
+
+## 🚫 Step 2: Direct Admin Access Test
+
+Manually navigate to:
+
+/admin
+
+❌ **Access denied**
+
+### Conclusion:
+- Admin access depends on **role assignment**
+- Role is not yet applied
+
+---
+
+## 🔁 Step 3: Intercept Login Request
+
+**Tool:** Burp Suite – Proxy (Intercept **ON**)
+
+### Actions:
+- Log out
+- Revisit login page
+- Log in again as `wiener`
+
+### Intercepted request:
+
+POST /login
+
+✅ Forward this request **normally**
+
+---
+
+## 🛑 Step 4: Drop Role Selector Request (**KEY STEP**)
+
+### Next intercepted request:
+
+GET /role-selector
+
+### Action taken:
+- ❌ **Drop the request**
+- ❌ Do NOT forward
+
+📌 This prevents backend role-selection logic from executing.
+
+---
+
+## 🌐 Step 5: Manual Navigation
+
+Manually browse to:
+
+/
+
+(or homepage URL)
+
+### 🧠 Backend behavior:
+- Assumes role assignment already occurred
+- Applies **default role**
+- Default role = **administrator**
+
+⚠️ **Missing state validation causes implicit admin assignment**
+
+---
+
+## 💥 Step 6: Admin Panel Access
+
+Navigate to:
+
+/admin
+
+✅ **Access granted**
+
+### Final action:
+- Delete user `carlos`
+
+🎉 **Lab solved**
+
+---
+
+## 🔹 Real-World Scenarios (COMPLETE)
+
+### 1️⃣ Role-Based Login Systems
+- Role chosen post-authentication
+- Backend defaults role if skipped
+
+**Impact:** Unauthorized admin access
+
+---
+
+### 2️⃣ SSO + Internal Role Mapping
+- SSO login succeeds
+- Local role mapping skipped
+
+**Impact:** Users gain excessive privileges
+
+---
+
+### 3️⃣ Multi-Step Login Portals
+- Login → Profile setup → Dashboard
+- Attacker skips setup
+
+**Impact:** Broken auth state
+
+---
+
+### 4️⃣ Enterprise Dashboards
+- Permissions assigned later
+- Missing step = admin
+
+**Impact:** Internal compromise
+
+---
+
+### 5️⃣ Mobile App APIs
+- Client enforces role logic
+- Backend trusts client
+
+**Impact:** API-level privilege escalation
+
+---
+
+## 🔹 High-Value Endpoints to Test
+
+### 🔐 Authentication / Role Paths:
+- `/login`
+- `/role-selector`
+- `/select-role`
+- `/choose-role`
+- `/setup`
+- `/onboarding`
+- `/home`
+- `/dashboard`
+- `/admin`
+
+### 🚩 Red Flags:
+- Role assignment **after** login
+- Separate role-selection endpoints
+- No role validation on homepage
+
+---
+
+## 🔹 Multi-Chain Attack Paths
+
+### 🔗 Chain 1
+- Login  
+- → Skip role assignment  
+- → Default admin  
+- → Admin panel  
+- → Full takeover  
+
+---
+
+### 🔗 Chain 2
+- Auth bypass  
+- → Admin  
+- → IDOR  
+- → Data deletion  
+
+---
+
+### 🔗 Chain 3
+- Role bypass  
+- → Admin  
+- → Config access  
+- → RCE / SSRF  
+
+---
+
+## 🔹 Remediation (Developer Fix)
+
+### ✅ MUST:
+- Enforce auth state **server-side**
+- Require role assignment before session activation
+- Block access if role step is skipped
+- Validate role on **every request**
+
+### ❌ NEVER:
+- Assume login flow order
+- Default to privileged roles
+- Trust frontend navigation
+- Allow partial authentication states
+
+---
+
+## 🔹 Extra Notes (Exam + Bug Bounty)
+
+### 🧠 Golden Rule
+> **If a step exists in the login flow, it must be enforced server-side.**
+
+### 🔥 Red Flags
+- Redirect-based role assignment
+- Separate role pages
+- Login success without final validation
+
+### 📌 Severity:
+- OWASP Top 10 related
+- **High → Critical**
+- Extremely common in real applications
+
+---
+
+## 🧠 One-Line Memory Hook
+
+> **If skipping one login step gives more access, authentication is broken.**
