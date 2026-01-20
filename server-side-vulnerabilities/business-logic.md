@@ -3091,9 +3091,9 @@ POST /login
 ## 🛑 Step 4: Drop Role Selector Request (**KEY STEP**)
 
 ### Next intercepted request:
-
-GET /role-selector
-
+```
+GET /role-selector HTTP/2
+```
 ### Action taken:
 - ❌ **Drop the request**
 - ❌ Do NOT forward
@@ -3105,9 +3105,9 @@ GET /role-selector
 ## 🌐 Step 5: Manual Navigation
 
 Manually browse to:
-
+```
 /
-
+```
 (or homepage URL)
 
 ### 🧠 Backend behavior:
@@ -3122,9 +3122,9 @@ Manually browse to:
 ## 💥 Step 6: Admin Panel Access
 
 Navigate to:
-
+```
 /admin
-
+```
 ✅ **Access granted**
 
 ### Final action:
