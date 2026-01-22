@@ -3259,3 +3259,252 @@ Navigate to:
 ## 🧠 One-Line Memory Hook
 
 > **If skipping one login step gives more access, authentication is broken.**
+
+---
+
+# Lab-12 🐞 Business Logic Vulnerabilities – Workflow, Coupons & Tokens  
+## (Token Interchange / Still Valid – Real-World Logic Failure)
+
+---
+
+## 🔹 Overview
+
+*Business logic vulnerabilities arise when an application’s rules are broken due to unsafe assumptions — not technical bugs.*
+
+The application may be technically secure, but it *assumes*:
+
+- Users follow the intended workflow  
+- Tokens are used only once  
+- Tokens belong to a specific action  
+- Validation done earlier never needs re-checking  
+
+🧠 *Attackers exploit how the system *thinks, not how it’s coded.**
+
+📌 Extremely common in:
+- E-commerce  
+- FinTech  
+- Authentication & reset flows  
+- Subscription systems  
+
+---
+
+## 🔹 What Is This Topic?
+
+### ❗ This is NOT:
+- ❌ SQL Injection  
+- ❌ XSS  
+- ❌ RCE  
+
+### ✅ This IS:
+- *Business Logic Vulnerability*
+- *Token lifecycle failure*
+- *State & workflow enforcement bug*
+
+> *Core mistake:*  
+> The backend trusts that a token validated once will remain valid in any context.
+
+Attackers:
+- Reuse tokens  
+- Interchange tokens  
+- Replay requests  
+- Apply tokens outside intended flow  
+
+---
+
+## 🔹 Lab Walkthrough (Token Interchange – Single Screenshot Case)
+
+### 🧪 Token Reuse & Interchange Logic Flaw
+
+---
+
+## 🎯 Lab Goal
+
+*Prove that interchanging or replaying tokens still results in a valid final action.*
+
+---
+
+## 🔐 Step 1: Perform a Legitimate Action
+-Log in as credentials `wiener:peter`
+- Trigger a valid workflow (e.g., coupon apply / reset / verification)
+- Server issues a token, NEWCUST5.
+- Action succeeds normally
+- At the bottom of the page, sign up to the newsletter. You receive another coupon code, SIGNUP30.
+- Add the leather jacket to your cart.
+
+---
+
+## 🔁 Step 2: Interchange / Reuse Token
+- Go to the checkout and apply both of the coupon codes to get a discount on your order.
+- Use the *same token* again in a row twice results in coupon already used. 
+- Swap the both tokens and then apply again and again by swapping results in success 
+- Keep on doing it until the total value of reduces to your account balance.
+- Place order confirmation true.
+- Lab solved.
+
+```
+Server only compares the value of new token with previous token and as the value is different , it allows it without checking the state history that this token is expired or already use or not
+```
+
+⚠️ No new validation step is triggered.
+
+---
+
+## 🧪 Step 3: Final Output (📸 *ONLY SS HERE*)
+
+✔ Action succeeds 
+✔ Token accepted 
+✔ Server does not reject or invalidate
+
+📌 This confirms:
+- Token is *still valid*
+- Token lifecycle is *not enforced*
+- Business rule is *broken*
+
+---
+
+## Evidence/Proof
+
+### Screenshor-01
+![Token interchange still valid at final output](../images/token-interchange-valid.png)
+
+---
+
+## 🔹 Why This Works (Backend Logic Failure)
+
+The server:
+- ❌ Does NOT invalidate token after use  
+- ❌ Does NOT bind token to a single action  
+- ❌ Does NOT bind token to workflow state  
+- ❌ Assumes “already validated = always valid”  
+
+➡️ *Token interchange succeeds*
+
+---
+
+## 🔹 Real-World Scenarios (COMPLETE)
+
+### 1️⃣ Token Replay (MOST COMMON)
+- Token validated once
+- Token reused successfully
+
+*Impact:* Account takeover / repeated actions
+
+---
+
+### 2️⃣ Token Interchange Between Actions
+- Same token works for multiple endpoints
+
+*Impact:* Privilege escalation
+
+---
+
+### 3️⃣ Token Not Bound to User
+- Token valid for any account
+
+*Impact:* Cross-account abuse
+
+---
+
+### 4️⃣ Token Not Bound to State
+- Token valid even when workflow not completed
+
+*Impact:* 2FA bypass / payment bypass
+
+---
+
+### 5️⃣ Coupon + Token Abuse
+- Coupon validated
+- Cart changes later
+- Token reused → discount still applies
+
+*Impact:* Free or underpriced purchases
+
+---
+
+## 🔹 High-Value Endpoints to Test
+
+### 🔑 Tokens & Validation
+```
+- /verify
+- /confirm
+- /token/validate
+- /reset-password
+- /2fa
+```
+
+### 🛒 State-Changing
+```
+- /apply-coupon
+- /checkout
+- /order/confirm
+- /success
+- /finalize
+```
+
+🚩 *Red Flags*
+- Reusable tokens  
+- Boolean flags (valid=true)  
+- No expiry  
+- Same token across endpoints  
+
+---
+
+## 🔹 Multi-Chain Attacks
+
+### 🔗 Chain 1 – Token Replay
+Token issued  
+→ Token reused  
+→ Action repeated  
+
+---
+
+### 🔗 Chain 2 – Token + Workflow Bypass
+Token validated  
+→ Skip steps  
+→ Final endpoint accessed  
+
+---
+
+### 🔗 Chain 3 – Token + IDOR
+Valid token  
+→ Change user reference  
+→ Modify another account  
+
+---
+
+## 🔹 Remediation (Developer Fix)
+
+### ✅ MUST:
+- Bind tokens to *user*
+- Bind tokens to *single action*
+- Bind tokens to *workflow state*
+- Add *strict expiry*
+- Invalidate token after use
+- Re-validate on final step
+
+### ❌ NEVER:
+- Reuse tokens
+- Trust earlier validation
+- Accept tokens without state checks
+- Assume UI enforces logic
+
+---
+
+## 🔹 Extra Notes (Exam + Bug Bounty)
+
+### 🧠 Golden Rule
+> *If a token works twice, logic is broken.*
+
+### 🔥 Red Flags
+- Tokens without expiry  
+- Tokens reused across endpoints  
+- Final actions without re-validation  
+
+📌 *Severity:* High → Critical  
+📌 *Category:* Business Logic / Workflow Abuse  
+
+---
+
+## 🧠 One-Line Memory Hook
+
+> *Business logic bugs exist because the server assumes — not because it verifies.
