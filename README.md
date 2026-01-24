@@ -27,12 +27,12 @@ Each lab follows a concise, recruiter-friendly format: *Overview → Methodology
 ---
 
 ### 🔹 Client-Side Vulnerabilities (learning path)
-1. [Cross-Site Scripting (XSS)](client-side/xss.md)  
-2. [Cross-Site Request Forgery (CSRF)](client-side/csrf.md)  
-3. [Cross-Origin Resource Sharing (CORS)](client-side/cors.md)  
-4. [Clickjacking](client-side/clickjacking.md)  
-5. [DOM-based Vulnerabilities](client-side/dom-attacks.md)  
-6. [WebSockets Security](client-side/websockets.md)
+1. [Cross-Site Scripting (XSS)](client-side-vulnerabilities/xss.md)  
+2. [Cross-Site Request Forgery (CSRF)](client-side-vulnerabilities/csrf.md)  
+3. [Cross-Origin Resource Sharing (CORS)](client-side-vulnerabilities/cors.md)  
+4. [Clickjacking](client-side-vulnerabilities/clickjacking.md)  
+5. [DOM-based Vulnerabilities](client-side-vulnerabilities/dom-attacks.md)  
+6. [WebSockets Security](client-side-vulnerabilities/websockets.md)
 
 ---
 
