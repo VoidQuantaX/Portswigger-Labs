@@ -3508,3 +3508,295 @@ Valid token
 ## 🧠 One-Line Memory Hook
 
 > *Business logic bugs exist because the server assumes — not because it verifies.
+
+---
+
+# Lab-13 🔐 Encryption Oracle Vulnerability — Complete Lab Write-Up
+
+## Overview
+
+An *Encryption Oracle vulnerability* occurs when an application:
+- Accepts attacker-controlled input
+- Encrypts it using a secret key
+- Returns or stores the ciphertext
+- Reuses the *same encryption logic* elsewhere (auth, cookies, tokens)
+
+When combined with a *Decryption Oracle*, attackers can:
+- Learn plaintext structure
+- Forge valid encrypted data
+- Bypass authentication
+
+> Encryption ≠ Authorization
+
+---
+
+## What Is Being Exploited
+
+This is *NOT* SQLi, XSS, or RCE.
+
+This is a *cryptographic design + logic flaw* where:
+- The backend trusts encrypted client data
+- The same crypto key is reused
+- State is stored client-side
+
+---
+
+## Lab Goal
+
+- Abuse an encryption oracle
+- Forge a valid stay-logged-in cookie
+- Authenticate as administrator
+- Delete user carlos
+
+---
+
+## High-Level Logic
+
+Two oracles exist:
+
+- *Encryption Oracle*
+  - Endpoint: POST /post/comment
+  - Input: email
+  - Output: encrypted notification cookie
+
+- *Decryption Oracle*
+  - Endpoint: GET /post?postId=x
+  - Input: notification cookie
+  - Output: plaintext error message
+
+Together, they allow *chosen-plaintext encryption + plaintext recovery*.
+
+---
+
+## Final Lab Walkthrough (Strict Order)
+
+---
+
+### Step 1 — Trigger Encrypted Error
+
+- Login as wiener
+- Enable *Stay logged in*
+- Visit any blog post
+- Post a comment with an *invalid email*
+
+Why:
+- Invalid email forces an error
+- Error message is encrypted
+- Ciphertext is stored in notification cookie
+
+![Invalid Email Comment](../images/ss1-invalid-email.png)
+
+---
+
+### Step 2 — Observe Cookies
+
+In Burp Proxy:
+- stay-logged-in → encrypted
+- notification → encrypted
+
+Browser error:
+
+Invalid email address: your-input
+
+Conclusion:
+- Error text is produced by decrypting the cookie
+
+![Cookies Observed](../images/ss2-cookies.png)
+
+---
+
+### Step 3 — Capture Requests
+
+Send to Repeater:
+```
+1. POST /post/comment  → encrypt
+2. GET /post?postId=6 → decrypt
+```
+Rename tabs:
+- 🟢 encrypt
+- 🔵 decrypt
+
+---
+
+### Step 4 — Identify Oracles
+
+Encryption Oracle:
+- Input: email
+- Output: Set-Cookie: notification=...
+
+Decryption Oracle:
+- Input: notification
+- Output: plaintext error
+
+This is the core vulnerability.
+
+---
+
+### Step 5 — Decrypt Stay-Logged-In Cookie
+
+- Copy stay-logged-in
+- Paste into notification
+- Send decrypt request
+
+Response:
+
+wiener:timestamp
+
+Format learned:
+
+username:timestamp
+
+![Decrypt Stay Logged In](../images/ss3-decrypt-stay-logged.png)
+
+---
+
+### Step 6 — Create Admin Payload
+
+- Copy timestamp
+- Go to encrypt request
+- Change email to:
+
+administrator:timestamp
+
+- Send request
+- Copy new notification cookie
+
+---
+
+### Step 7 — Prefix Problem
+
+Decryption output:
+
+Invalid email address: administrator:timestamp
+
+Reason:
+- App prepends:
+
+Invalid email address:
+
+- Length = *23 bytes*
+
+This breaks reuse.
+
+---
+
+### Step 8 — Decode Ciphertext
+
+In Decoder:
+- URL decode
+- Base64 decode
+- Switch to Hex view
+
+---
+
+### Step 9 — Block Size Discovery
+
+Removing bytes causes server error unless length is:
+
+multiple of 16 bytes
+
+Conclusion:
+- AES block cipher in use
+
+---
+
+### Step 10 — Padding Alignment
+
+Return to encrypt request:
+```
+xxxxxxxxxadministrator:timestamp
+```
+Reason:
+- 23 + 9 = 32 bytes
+- 32 is divisible by 16
+
+---
+
+### Step 11 — Strip Prefix Blocks
+
+- Encrypt padded input
+- Decode to Hex
+- Remove *first 32 bytes*
+- Re-encode:
+  - Base64
+  - URL
+
+---
+
+### Step 12 — Verify Clean Decryption
+
+Paste modified cookie into decrypt request.
+
+Response:
+```
+administrator:timestamp
+```
+Prefix successfully removed.
+
+![Clean Decryption](../images/ss4-clean-admin-cookie.png)
+
+---
+
+### Step 13 — Authenticate as Admin
+
+- Send GET /
+- Remove session cookie
+- Replace stay-logged-in with forged cookie
+
+Result:
+- Logged in as administrator
+
+![Admin Access](../images/ss5-admin-access.png)
+
+---
+
+### Step 14 — Finish Lab
+
+Visit:
+```
+/admin /admin/delete?username=carlos
+```
+Lab solved.
+
+![Delete Carlos](../images/ss6-admin-panel-access.png)
+
+---
+
+## Real-World Impact
+
+Seen in:
+- Remember-me cookies
+- Password reset tokens
+- Encrypted user blobs
+- Notification cookies
+- SSO implementations
+
+---
+
+## Multi-Chain Attacks
+
+- Encryption Oracle + IDOR
+- Encryption Oracle + Replay
+- Encryption Oracle + Logic Flaw
+- Encryption Oracle + Padding Oracle
+- Encryption Oracle + CSRF
+
+---
+
+## Developer Remediation
+
+- Never trust encrypted client data
+- Use AEAD (AES-GCM)
+- Bind tokens to:
+  - User
+  - Action
+  - Time
+  - State
+- Store auth state server-side
+- Rotate keys per feature
+
+---
+
+## Golden Rule
+
+> If the server assumes, attackers abuse.
